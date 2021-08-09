@@ -23,7 +23,10 @@ def spinHalf():
     st.addOp("y", tensor((2, 2), np.array([[0, -1j], [1j, 0]], dtype=np.complex128)))
     st.addOp("z", tensor((2, 2), np.array([[1, 0], [0, -1]], dtype=np.complex128)))
     st.addOp("id", tensor((2, 2), np.array([[1, 0], [0, 1]], dtype=np.complex128)))
+    st.addOp("n", tensor((2, 2), np.array([[1, 0], [0, 0]], dtype=np.complex128)))
     st.addOp("pu", tensor((2, 2), np.array([[1, 0], [0, 0]], dtype=np.complex128)))
     st.addOp("pd", tensor((2, 2), np.array([[0, 0], [0, 1]], dtype=np.complex128)))
+    st.addOp("s+", tensor((2, 2), np.array([[0, 1], [0, 0]], dtype=np.complex128)))
+    st.addOp("s-", tensor((2, 2), np.array([[0, 0], [1, 0]], dtype=np.complex128)))
     
     return st

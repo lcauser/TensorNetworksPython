@@ -147,6 +147,9 @@ class mps:
         return self
     
     
+    """
+        Update this to support n-sites.
+    """
     def replacebond(self, site, A, rev=False, mindim=1, maxdim=0, cutoff=0):
         # Group the indices together
         dims = np.shape(A)

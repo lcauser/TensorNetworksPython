@@ -7,8 +7,8 @@ from tensornetworks.algorithms.dmrg import dmrg
 
 # Parameters
 c = 0.5
-s = 0.001
-N = 60
+s = -1.0
+N = 20
 
 # Load spin half
 sh = spinHalf()
@@ -32,4 +32,3 @@ psi = productMPS(2, N, B)
 #psi = randomMPS(2, N, 1)
 
 psi2 = dmrg(H, psi)
-psi3 = dmrg(H, psi, 10*psi2)
