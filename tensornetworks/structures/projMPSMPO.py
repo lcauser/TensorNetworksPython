@@ -87,6 +87,7 @@ class projMPSMPO(LinearOperator):
 
     
     def _matvec(self, x):
+        #print('yes')
         # Determine the sites
         site1 = self.center if not self.rev else self.center - 1
         site2 = self.center + 1 if not self.rev else self.center
