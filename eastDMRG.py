@@ -8,7 +8,7 @@ from tensornetworks.algorithms.dmrg import dmrg
 # Parameters
 c = 0.5
 s = -1.0
-N = 20
+N = 100
 
 # Load spin half
 sh = spinHalf()
@@ -28,7 +28,7 @@ H.tensors[0] = M1
 # Make equilibrium MPS
 B = tn.tensor((1, 2, 1), [[[np.sqrt(c)]], [[np.sqrt(1-c)]]])
 #B = tn.tensor((1, 2, 1), [[[0]], [[1]]])
-psi = productMPS(2, N, B)
+#psi = productMPS(2, N, B)
 #psi = randomMPS(2, N, 1)
 
 psi2 = dmrg(H, psi)
