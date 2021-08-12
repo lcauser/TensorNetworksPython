@@ -19,7 +19,7 @@ class projMPS(LinearOperator):
         self.blocks = [0] * self.psi.length
         self.center = 0
         self.rev = False
-        self.moveCenter(self.psi.length - 1)
+        self.center = self.psi.length - 1
         self.moveCenter(0)
         self.moveCenter(center)
         self.shape = lambda: self.opShape()

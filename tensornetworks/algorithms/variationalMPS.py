@@ -1,13 +1,12 @@
 # Imports
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
-#from stuctures.tensors import *
-#from structures.mps import *
-#from structures.projMPS import *
-from scipy.sparse.linalg import LinearOperator, spsolve
-from scipy.sparse.linalg import cg
+from tensornetworks.tensors import *
+from tensornetworks.structures.mps import *
+from tensornetworks.structures.projMPS import *
 
-def variationalSum(psi0, Vs, minsweeps=4, maxsweeps=1000, mindim=1, maxdim=0, cutoff=0):
+def variationalSum(psi0, Vs, minsweeps=1, maxsweeps=1000, mindim=1, maxdim=0,
+                   cutoff=0, eps=10**-8, verbose=0):
     # Check to see if Vs is list
     if not isinstance(Vs, list):
         Vs = [Vs]
@@ -17,7 +16,7 @@ def variationalSum(psi0, Vs, minsweeps=4, maxsweeps=1000, mindim=1, maxdim=0, cu
     psi.orthogonalize(0)
     
     # Get the projectors for each term and projector
-    projVs = [projMPS(psi, V) for V in Vs]
+    projVs = [projMPS(V, psi) for V in Vs]
     
     # Loop through until converged
     converged = False
@@ -32,8 +31,7 @@ def variationalSum(psi0, Vs, minsweeps=4, maxsweeps=1000, mindim=1, maxdim=0, cu
                 # Define the effective operator at the sites
                 site1 = site if not rev else site - 1
                 site2 = site+1 if not rev else site
-                dims = (psi.tensors[site1].dims[0], psi.dim, psi.dim, psi.tensors[site2].dims[2])
-                dim = np.prod(dims)
+                dims = (np.shape(psi.tensors[site1])[0], psi.dim, psi.dim, np.shape(psi.tensors[site2])[2])
                 
                 # Find the effective vector
                 i = 0 
@@ -44,11 +42,7 @@ def variationalSum(psi0, Vs, minsweeps=4, maxsweeps=1000, mindim=1, maxdim=0, cu
                         vec += projV._matvec(0)
                     i += 1
                 
-                
-                # Find the initial vector
-                A = contract(psi.tensors[site1], psi.tensors[site2], 2, 0)
-                A = A.storage.flatten()
-                
+      
                 # Find the optimal solution
                 A = vec
                 
@@ -77,14 +71,16 @@ def variationalSum(psi0, Vs, minsweeps=4, maxsweeps=1000, mindim=1, maxdim=0, cu
         diff = np.abs((prevCost - cost) / cost)
         prevCost = cost
         bondDim = psi.maxBondDim()
+        
         # Calculate overlap
         if sweeps >= minsweeps:
-            if diff < 10**-12:
+            if diff < eps:
                 if lastBondDim == bondDim:
                     converged = True
         lastBondDim = bondDim
-        
-        #print("Sweep "+str(sweeps)+" cost="+str(diff)+" maxbonddim="+str(bondDim))
+        if verbose:
+            print("Sweep " + str(sweeps) + " cost="+str(diff) + \
+                  " maxbonddim=" + str(bondDim))
         
     return psi
                 

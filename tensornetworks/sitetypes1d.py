@@ -1,4 +1,4 @@
-from tensornetworks.tensors import tensor
+from tensornetworks.tensors import tensor, contract
 import numpy as np
 
 class sitetypes1d:
@@ -9,6 +9,8 @@ class sitetypes1d:
         self.states = []
         self.opNames = []
         self.ops = []
+        self.opDags = []
+        self.temp = 0
         
     
     def addState(self, name : str, A):
@@ -53,7 +55,7 @@ class sitetypes1d:
         return self.states[self.stateNames.index(name)]
     
     
-    def addOp(self, name : str, A):
+    def addOp(self, name : str, A, hermitian = False):
         """ Add a operator to the sitetype.
         
         Parameters:
@@ -74,6 +76,7 @@ class sitetypes1d:
         # Add to list
         self.opNames.append(name)
         self.ops.append(A)
+        self.opDags.append(hermitian)
     
     
     def op(self, name : str):
@@ -93,4 +96,37 @@ class sitetypes1d:
         
         # Find the idx
         return self.ops[self.opNames.index(name)]
+    
+    
+    def dagger(self, name : str):
+        """ Find the name of the hermitian conjugate of an operator.
+        
+        Parameters:
+            name (str): the name of the operator e.g. "s+"
+        
+        Returns:
+            conj (str): the name of the hermitian conjugate e.g. "s-"
+        """
+        conj = self.opDags[self.opNames.index(name)]
+        if not conj in self.opNames:
+            raise ValueError("The hermitian operator is not defined.")
+        return conj
+    
+    
+    def opProd(self, ops):
+        if not isinstance(ops, list):
+            ops = [ops]
+        prod = self.op("id")
+        for op in ops:
+            prod = contract(prod, self.op(op), 1, 0)
+        
+        for idx in range(len(self.ops)):
+            if np.all(np.abs(prod - self.ops[idx]) < 10**-14):
+                return self.opNames[idx]
+        
+        # Create a new operator
+        opName = "temp" + str(self.temp)
+        self.temp += 1
+        self.addOp(opName, prod)
+        return opName
 

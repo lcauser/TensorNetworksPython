@@ -101,7 +101,7 @@ def dmrg(Hs, psi0 : mps, Vs=[], maxsweeps=0, minsweeps=1, tol=10**-8,
         
         # Output sweep information
         sweeps += 1
-        print("Sweep "+str(sweeps)+", energy="+str(eig), "maxbonddim="+str(psi.maxBondDim()))
+        print("Sweep "+str(sweeps)+", energy="+str(eig)+"maxbonddim="+str(psi.maxBondDim()))
         
         # Check convergence
         if sweeps >= minsweeps:

@@ -2,6 +2,7 @@
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
 from tensornetworks.tensors import *
+from tensornetworks.sitetypes1d import sitetypes1d
 
 class mps:
     
@@ -206,7 +207,7 @@ def randomMPS(dim, length, bondDim=1, normalize=True, dtype=np.complex128):
     return psi
 
 
-def productMPS(dim, length, A, dtype=np.complex128):
+def meanfieldMPS(dim, length, A, dtype=np.complex128):
     # Create MPS
     psi = mps(dim, length, dtype)
     A = np.reshape(A, (1, np.size(A), 1))
@@ -216,6 +217,18 @@ def productMPS(dim, length, A, dtype=np.complex128):
     
     return psi
 
+
+def productMPS(s : sitetypes1d, states):
+    # Check list of states
+    if not isinstance(states, list):
+        raise ValueError("States must be a list of product states.")
+    
+    # Create mps
+    psi = mps(s.dim, len(states))
+    for i in range(len(states)):
+        psi.tensors[i][0, :, 0] = s.state(states[i])
+    
+    return psi
 
 def dot(psi : mps, phi : mps):
     # Initilize at first site
