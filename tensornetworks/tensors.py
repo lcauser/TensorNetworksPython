@@ -145,7 +145,7 @@ def svd(x, idx=-1, mindim=1, maxdim=0, cutoff=0):
     if maxdim == 0:
         maxdim = np.size(S)
     maxdim = min(np.size(S), maxdim)
-    if cutoff != 0:
+    if cutoff != 0 and np.sum(S) > 10**-16:
         S2 = S**2
         S2cum = np.flip(np.cumsum(np.flip(S2)) / np.sum(S2))
         idx = np.where(S2cum > cutoff)[0][-1]
@@ -169,7 +169,7 @@ def svd(x, idx=-1, mindim=1, maxdim=0, cutoff=0):
     U = uncombineIdxs(U, comb)
     
     return U, S, V
-        
+
     
 def norm(tensor):
     x = tensor.flatten()
@@ -188,7 +188,7 @@ def reshape(x, shape):
 def exp(x, idxs, t = 1):
     if not isinstance(idxs, list):
         idxs = [idxs]
-    
+    x = copy.deepcopy(x)
     x *= t
     x, C1 = combineIdxs(x, idxs)
     x, C2 = combineIdxs(x, [i for i in range(len(np.shape(x))-1)])
