@@ -16,7 +16,7 @@ from tensornetworks.structures.gateList import gateList, trotterize, applyGates
 from tensornetworks.algorithms.variationalMPS import variationalSum
 
 
-def tebd(psi : mps, H : opList, tmax, Vs=[], observers=[], dynamics='real', 
+def tebd(psi : mps, H : opList, tmax, Vs=[], observers=[], dynamics='imaginary', 
          dt = 0.01, save = 0.1, order = 2, norm=0, updates='fast',
          mindim=1, maxdim=0, cutoff=10**-12):
     """
@@ -35,7 +35,7 @@ def tebd(psi : mps, H : opList, tmax, Vs=[], observers=[], dynamics='real',
     observers: list, optional
         List of observer classes. The default is [].
     dynamics : str, optional
-        'real' (imaginary) or 'quantum'. The default is 'real'.
+        'imaginary' or 'quantum'. The default is 'real'.
     dt : float, optional
         The timestep in evolution gates. The default is 0.01.
     save : float, optional

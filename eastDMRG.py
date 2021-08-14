@@ -5,18 +5,19 @@
     Afterwards, we measure occupations and NN correlations.
 """
 
-from tensornetworks.structures.mps import *
-from tensornetworks.structures.mpo import *
+from tensornetworks.structures.mps import randomMPS, meanfieldMPS
+from tensornetworks.structures.mpo import uniformMPO
 from tensornetworks.lattices.spinHalf import spinHalf
 import numpy as np
 import tensornetworks.tensors as tn
 from tensornetworks.algorithms.dmrg import dmrg
 from tensornetworks.structures.opList import opList, opExpectation
+import copy
 
 # Parameters
 c = 0.5
 s = -1.0
-N = 100
+N = 1000
 
 # Load spin half
 sh = spinHalf()

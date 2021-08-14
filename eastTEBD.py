@@ -6,13 +6,10 @@
     we consider it converged.
 """
 
-from tensornetworks.structures.mps import *
-from tensornetworks.structures.mpo import *
+from tensornetworks.structures.mps import meanfieldMPS
 from tensornetworks.lattices.spinHalf import spinHalf
 import numpy as np
-import tensornetworks.tensors as tn
 from tensornetworks.structures.opList import opList
-from tensornetworks.structures.gateList import gateList, trotterize, applyGates
 from tensornetworks.algorithms.tebd import tebd, normTEBDobserver, oplistTEBDobserver
 
 N = 100
@@ -27,13 +24,13 @@ psi0 = meanfieldMPS(2, N, B).orthogonalize(N-1).orthogonalize(0)
 
 # Create the Hamiltonian
 ops = opList(spinHalf(), N)
+ops.add(["x"], [0], np.sqrt(c*(1-c))*np.exp(-s))
+ops.add(["pu"], [0], -(1-c))
+ops.add(["pd"], [0], -c)
 for i in range(N-1):
     ops.add(["n", "x"], [i, i+1], np.sqrt(c*(1-c))*np.exp(-s))
     ops.add(["n", "pu"], [i, i+1], -(1-c))
     ops.add(["n", "pd"], [i, i+1], -c)
-ops.add(["x"], [0], np.sqrt(c*(1-c))*np.exp(-s))
-ops.add(["pu"], [0], -(1-c))
-ops.add(["pd"], [0], -c)
 
 # Obserer to measure the norm
 normObs = normTEBDobserver(10**-10)
