@@ -77,7 +77,12 @@ class opList2d:
         
         return self
     
-    
+    def siteIndexs(self, sites):
+        idxs = []
+        for i in range(len(self.sites)):
+            if min(self.sites[i]) == sites:
+                idxs.append(i)
+        return idxs
 
             
         
@@ -102,7 +107,14 @@ def trotterize(ops : opList2d, timestep : float, order : int = 1):
 
     # Create horizontal even bonds
     for i in range(ops.length[0]):
-        
+        for j in range(ops.length[1]):
+            if j % 0 == 0:
+                idxs = gl.siteIndexs([i, j])
+                for idx in idxs:
+                    names = ops.ops[idx]
+                    sites = ops.sites[idx]
+                    coeff = ops.coeffs[idx]
+                    
 
     if order == 1:
         for i in range(rng):

@@ -1,3 +1,8 @@
+""" 
+    Provides functions to create tensors (as numpy arrays) and manipulate them.
+"""
+
+
 # Imports
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
@@ -5,6 +10,25 @@ from scipy.linalg import expm
 
 
 def tensor(dims, data=None, dtype=np.complex128):
+    """
+    Create a tensor.
+
+    Parameters
+    ----------
+    dims : tuple
+        Dimensions of the tensor
+    data : multi-dimensional array (or np array), optional
+        The information the tensor carries. The default is None.
+    dtype : datatype, optional
+        The datatype for the tensor.. The default is np.complex128.
+
+    Returns
+    -------
+    np.ndarray
+        Multi-dimensional np array.
+
+    """
+    
     # Set dimensions
     if isinstance(dims, int):
         dims = (dims, )
@@ -17,6 +41,24 @@ def tensor(dims, data=None, dtype=np.complex128):
 
 
 def randomTensor(dims, dtype=np.complex128):
+    """
+    Create a tensor with random entries
+
+    Parameters
+    ----------
+    dims : tuple
+        Dimensions of the tensor
+    dtype : datatype, optional
+        The datatype for the tensor.. The default is np.complex128.
+
+    Returns
+    -------
+    np.ndarray
+        Multi-dimensional np array.
+
+    """
+    
+    # Draw an array of random numbers.
     data = np.random.normal(size=dims).astype(dtype)
     if dtype == np.complex128:
         data += 1j*np.random.normal(size=dims).astype(dtype)
@@ -24,15 +66,56 @@ def randomTensor(dims, dtype=np.complex128):
 
 
 def contract(x, y, idx1, idx2):
+    """
+    Contract two tensors.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        First tensor.
+    y : np.ndarray
+        Second tensor.
+    idx1 : int
+        Index of first tensor.
+    idx2 : int
+        Index of second tensor.
+
+    Returns
+    -------
+    np.ndarray
+        Contracted tensors.
+
+    """
+    
+    # Ensure the contracting dimensions are the same size.
     if np.shape(x)[idx1] == np.shape(y)[idx2]:
         storage = np.tensordot(x, y, axes=(idx1, idx2))
         return tensor(np.shape(storage), storage, storage.dtype)
     else:
         raise("The dimensions of contracting indexes do not match.")
-        return 0
 
 
 def trace(x, idx1, idx2):
+    """
+    Take the trace of two dimensions in a tensor.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Tensor.
+    idx1 : int
+        First index.
+    idx2 : int
+        Second index.
+
+    Returns
+    -------
+    np.ndarray
+        Tensor with the dimensions traced.
+
+    """
+    
+    # Ensure the dimensions are the same size
     if np.shape(x)[idx1] == np.shape(x)[idx2]:
         storage = np.trace(x, axis1=idx1, axis2=idx2)
         return tensor(np.shape(storage), storage, storage.dtype)
@@ -42,6 +125,24 @@ def trace(x, idx1, idx2):
 
 
 def permute(x, idx, position=-1):
+    """
+    Permute an index in a tensor to a different position.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Tensor.
+    idx : int
+        Index to permute.
+    position : int, optional
+        The position to permute. The default is -1, which permutes to the end.
+
+    Returns
+    -------
+    np.ndarray
+        Tensor with permuted index.
+
+    """
     # Get the properties from the tensor
     dims = np.shape(x)
     storage = copy.deepcopy(x)
@@ -62,6 +163,26 @@ def permute(x, idx, position=-1):
 
 
 def combineIdxs(x, idxs):
+    """
+    Combine the indexs in a tensor.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Tensor.
+    idxs : list of ints
+        List of indexs to group.
+
+    Returns
+    -------
+    np.ndarray
+        Tensor with indexs grouped together.
+    list
+        Contains a list of of the grouped indexs and their dimensions, used
+        to uncombine them.
+
+    """
+    
     # Make a copy
     y = copy.deepcopy(x)
     
@@ -90,6 +211,23 @@ def combineIdxs(x, idxs):
 
 
 def uncombineIdxs(x, comb):
+    """
+    Uncombine the indexs of a tensor.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Tensor.
+    comb : list
+        Uncombiner list from combineIdx.
+
+    Returns
+    -------
+    y : np.ndarray
+        Tensor with indexs uncombined.
+
+    """
+    
     # make a copy
     y = copy.deepcopy(x)
     offset = len(np.shape(y))-1
@@ -112,7 +250,30 @@ def uncombineIdxs(x, comb):
     return y
 
 
-def svd(x, idx=-1, mindim=1, maxdim=0, cutoff=0):    
+def svd(x, idx=-1, mindim=1, maxdim=0, cutoff=0):   
+    """
+    Singular value decomposition of a tensor.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Tensor to apply SVD to.
+    idx : int, optional
+        Dimension to apply SVD to. The default is -1 (last index).
+    mindim : int, optional
+        The minimum number of singular values to keep. The default is 1.
+    maxdim : int, optional
+        The maximum number of singular values to keep. The default is 0, which
+        defines no upper limit.
+    cutoff : float, optional
+        The truncation error of singular values. The default is 0.
+
+    Returns
+    -------
+    U, S, V
+        Tensors from singular value decomposition.
+
+    """
     # Make a copy
     y = copy.deepcopy(x)
     
@@ -172,29 +333,121 @@ def svd(x, idx=-1, mindim=1, maxdim=0, cutoff=0):
 
     
 def norm(tensor):
+    """
+    Calulate the norm of a tensor by contracting its indices with itself.
+
+    Parameters
+    ----------
+    tensor : np.ndarray
+        Tensor
+
+    Returns
+    -------
+    np.complex64
+        The calculated norm of the tensor
+
+    """
     x = tensor.flatten()
     return np.sqrt(np.dot(x, np.conj(x)))    
 
 
 def ones(dims, dtype=np.complex128):
+    """
+    Create a tensor filled with ones.
+
+    Parameters
+    ----------
+    dims : tuple
+        Dimensions of the tensor.
+    dtype : type, optional
+        The data type of the tensor. The default is np.complex128.
+
+    Returns
+    -------
+    np.ndarray
+        The tensor filled with ones.
+
+    """
     return tensor(dims, np.ones(dims), dtype)
 
 
+def shape(x):
+    """
+    Find the dimensions of a tensor.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        The tensor.
+
+    Returns
+    -------
+    tuple
+        Dimensions of the tensor.
+
+    """
+    return np.shape(x)
+
+
 def reshape(x, shape):
+    """
+    Reshape a tensor.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        The tensor.
+    shape : tuple
+        New dimensions of the tensor.
+
+    Returns
+    -------
+    np.ndarray
+        Reshaped tensor.
+
+    """
     storage = np.reshape(x, shape)
     return tensor(shape, storage, x.dtype)
 
 
 def exp(x, idxs, t = 1):
+    """
+    Calculate the exponential of a tensor by recasting into a square rank-2
+    tensor, expontiating and moving back.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        The tensor.
+    idxs : list
+        List of indexs to form the second dimension of the tensor.
+    t : number, optional
+        The time to multiply by in the exponential. The default is 1.
+
+    Returns
+    -------
+    y : np.ndarray
+        The exponentiated tensor.
+
+    """
+    
+    # Check to see if the idxs are a list
     if not isinstance(idxs, list):
         idxs = [idxs]
+    
+    # Copy the tensor and multiply by time.
     x = copy.deepcopy(x)
     x *= t
+    
+    # Combine indexs and put into the correct shape
     x, C1 = combineIdxs(x, idxs)
     x, C2 = combineIdxs(x, [i for i in range(len(np.shape(x))-1)])
     x = permute(x, 1, 0)
-    storage = expm(x)
-    y = tensor(np.shape(x), storage, x.dtype)
+    
+    # Exponentiate
+    y = expm(x)
+    
+    # Return to original shape
     y = permute(y, 1, 0)
     y = uncombineIdxs(y, C2)
     y = uncombineIdxs(y, C1)
@@ -202,4 +455,18 @@ def exp(x, idxs, t = 1):
     
 
 def dag(x):
+    """
+    Calculate the complex conjugate of a tensor.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        The tensor.
+
+    Returns
+    -------
+    np.ndarray
+        The complex conjugated tensor.
+
+    """
     return np.conj(x)

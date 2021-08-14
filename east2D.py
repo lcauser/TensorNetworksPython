@@ -7,16 +7,16 @@ import copy
 
 # Parameters
 c = 0.5
-s = 0
+s = 1.0
 N = 4
-maxD = 3
+maxD = 2
 
 sh = spinHalf()
 states = []
 for i in range(N):
     states2 = []
     for j in range(N):
-        states2.append("s")
+        states2.append("dn")
     states.append(states2)
 states[0][0] = "up"
 states[N-1][N-1] = "s"
@@ -48,15 +48,28 @@ for i in range(N):
             sitesList.append([[i, j], [i+1, j]])
         
 
-
-for dt in [10, 1.0, 0.5, 0.1, 0.05, 0.01, 0.005, 0.001]:
+lastEnergy = 0
+energy = 1
+for dt in [0.1, 0.05, 0.01]:
+    lastEnergy = 0
     gates = exp(gate, [1, 3], dt)
-    for k in range(min(500, int(5000 / dt))):
+    while np.abs((energy - lastEnergy) / energy) > 10**-8:
+        for k in range(100):
+            for site in sitesList:
+                psi.applyGate(gates, site, maxdim=maxD, normalize=True)
+            #print("dt="+str(dt)+" sim="+str(k+1))
+        psi.normalize()
+        #print(dotPEPS(psi, psi))
+        
+        lastEnergy = energy
+        energy = 0
         for site in sitesList:
-            psi.applyGate(gates, site, maxdim=maxD, normalize=True)
-        print("dt="+str(dt)+" sim="+str(k+1))
-    psi.normalize()
-    #print(dotPEPS(psi, psi))
+            psi2 = copy.deepcopy(psi)
+            psi2.applyGate(gate, site, cutoff=10**-12)
+            energy += dotPEPS(psi, psi2)
+        
+        print("dt="+str(dt)+" energy="+str(np.real(energy)))
+
 
 #%%
 energy = 0
