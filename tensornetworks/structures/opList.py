@@ -171,10 +171,10 @@ class opList:
             else:
                 op = "id"
             
-            op = np.reshape(self.sitetype.op(op), (1, self.sitetype.dim,
+            op = reshape(self.sitetype.op(op), (1, self.sitetype.dim,
                                                    self.sitetype.dim, 1))
-            prod = contract(prod, op, len(np.shape(prod))-1, 0)
-        prod = trace(prod, 0, len(np.shape(prod))-1)
+            prod = contract(prod, op, len(shape(prod))-1, 0)
+        prod = trace(prod, 0, len(shape(prod))-1)
         return self.coeffs[idx]*prod
         
     
@@ -262,8 +262,8 @@ def opExpectation(ops : opList, psi : mps):
             # Find the range of the operator and fetch the blocks
             rng = max(ops.sites[idx]) - min(ops.sites[idx]) + 1
             site2 = site + rng - 1
-            left = projDot.blocks[site-1] if site > 0 else np.ones((1, 1))
-            right = projDot.blocks[site2+1] if site2 < psi.length-1 else np.ones((1, 1))
+            left = projDot.blocks[site-1] if site > 0 else ones((1, 1))
+            right = projDot.blocks[site2+1] if site2 < psi.length-1 else ones((1, 1))
             
 
             # Loop through the middle sites, applying the operators
