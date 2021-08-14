@@ -1,3 +1,9 @@
+"""
+    Gate Lists contains gates which can applied to multiple neighbouring sites
+    of an MPS, in a specific order.
+"""
+
+
 # Imports
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
@@ -10,12 +16,34 @@ from tensornetworks.structures.mps import mps
 class gateList:
     
     def __init__(self, length):
+        """
+        Create a gatelist to apply to an MPS.
+
+        Parameters
+        ----------
+        length : int
+            length of MPS.
+            
+        """
+        # Store information
         self.length = length
         self.sites = []
         self.gates = []
         return None
     
+    
     def add(self, gates, sites):
+        """
+        Add gates to the gate list.
+
+        Parameters
+        ----------
+        gates : list
+            List of tensors
+        sites : list
+            List of site integers
+
+        """
         if not isinstance(gates, list):
             gates = [gates]
         if not isinstance(sites, list):
@@ -49,13 +77,34 @@ class gateList:
     
 
 def trotterize(ops : opList, timestep : float, order : int = 1):
+    """
+    Takes an operator list and calcualtes the exponential via a trotter-suzuki
+    decomposition.
+
+    Parameters
+    ----------
+    ops : opList
+        List of operators
+    timestep : float
+        Evolution timestep
+    order : int, optional
+        Trotter order (only 1 or 2 supported). The default is 1.
+
+    Returns
+    -------
+    gl : gateList
+        List of trotter gates.
+
+    """
     # Create the gatelist and find the interaction range
     gl = gateList(ops.length)
     rng = ops.siteRange()
     
+    # Decide on which order to use; if range is one, no point using more than one.
     if rng == 1:
         order = 1
         
+    # Add the gates according to trotter decomposition
     if order == 1:
         for i in range(rng):
             gates = []
@@ -92,26 +141,93 @@ def trotterize(ops : opList, timestep : float, order : int = 1):
 
 
 def gateSize(gate):
+    """
+    Calculate the range of sites acted on by a gate.
+
+    Parameters
+    ----------
+    gate : np.ndarray
+        Tensor gate.
+
+    Returns
+    -------
+    size: int
+        Number of sites.
+
+    """
     return int(len(np.shape(gate))/2)
 
 
 def applyGate(gate, site, psi : mps, rev=False, mindim=1, maxdim=0, cutoff=0):
+    """
+    Apply a gate to an MPS.
+
+    Parameters
+    ----------
+    gate : np.ndarray
+        Tensor gate.
+    site : int
+        First site the gate acts on.
+    psi : mps
+    rev : bool, optional
+        True = sweep left, false = sweep right. The default is False.
+    mindim : int, optional
+        The minimum number of singular values to keep. The default is 1.
+    maxdim : int, optional
+        The maximum number of singular values to keep. The default is 0,
+        which defines no upper limit.
+    cutoff : float, optional
+        The truncation error of singular values. The default is 0.
+
+    Returns
+    -------
+    psi : mps
+        Updated MPS.
+
+    """
+    # Find the interaction range of the gate
     rng = gateSize(gate)
+    
+    # Find the product of all sites which the gate is applied too.
     prod = psi.tensors[site]
     for i in range(rng - 1):
         prod = contract(prod, psi.tensors[site+1+i], 2+i, 0)
+    
+    # Contract with the gate
     prod = contract(prod, gate, 1, 1)
     for i in range(rng - 1):
         prod = trace(prod, 1, 3+rng)
     prod = permute(prod, 1)
-    #print("----------")
-    #print(site)
-    #print(psi.center)
-    psi.replacebond(site, prod, rev, mindim=mindim, maxdim=maxdim, cutoff=cutoff)
+    
+    # Replace the tensors
+    psi.replacebond(site, prod, rev, mindim=mindim, maxdim=maxdim,
+                    cutoff=cutoff, nsites=rng)
     return psi
 
 
 def applyGates(gates : gateList, psi, mindim=1, maxdim=0, cutoff=0):
+    """
+    Apply an entire Gate List to an MPS.
+
+    Parameters
+    ----------
+    gates : gateList
+        List of gates to apply to the MPS.
+    psi : TYPE
+    mindim : int, optional
+        The minimum number of singular values to keep. The default is 1.
+    maxdim : int, optional
+        The maximum number of singular values to keep. The default is 0,
+        which defines no upper limit.
+    cutoff : float, optional
+        The truncation error of singular values. The default is 0.
+
+    Returns
+    -------
+    psi : mps
+        Evolved MPS
+
+    """
     for row in range(len(gates.gates)):
         # Move orthogonal center to the correct place
         firstSite = gates.sites[row][0]

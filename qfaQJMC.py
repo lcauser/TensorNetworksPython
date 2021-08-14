@@ -8,12 +8,12 @@ from tensornetworks.structures.gateList import gateList, trotterize, applyGates
 from tensornetworks.algorithms.qjmc import qjmcSimulation, qjmcGates, qjmc
 import matplotlib.pyplot as plt
 
-N = 40
+N = 10
 kappa = 1
-gamma = 0
-omega = 1
+gamma = 0.5
+omega = 0.1
 dt = 0.01
-tmax = 100.0
+tmax = 10.0
 saveTime = 0.1
 
 # Find the "light" and "dark states"
@@ -51,7 +51,7 @@ H.add(["x"], [0], omega)
 for i in range(N-1):
     H.add(["plight", "x"], [i, i+1], omega)
     H.add(["x", "plight"], [i, i+1], omega)
-#H.add(["x"], [N-1], omega)
+H.add(["x"], [N-1], omega)
 
 # Create the jump operators list
 jumpOps = opList(sh, N)
@@ -62,8 +62,8 @@ for i in range(N-1):
     jumpOps.add(["plight", "s+"], [i, i+1], np.sqrt(gamma))
     jumpOps.add(["s-", "plight"], [i, i+1], np.sqrt(kappa))
     jumpOps.add(["s+", "plight"], [i, i+1], np.sqrt(gamma))
-#jumpOps.add(["s-"], [N-1], np.sqrt(kappa))
-#jumpOps.add(["s+"], [N-1], np.sqrt(gamma))
+jumpOps.add(["s-"], [N-1], np.sqrt(kappa))
+jumpOps.add(["s+"], [N-1], np.sqrt(gamma))
 
 
 # Create code for observers

@@ -31,5 +31,5 @@ B = [np.sqrt(c), np.sqrt(1-c)]
 #psi = meanfieldMPS(2, N, B)
 psi = randomMPS(2, N, 1)
 
-psi2 = dmrg(H, psi, nsites=1)
-psi3 = dmrg(H, psi, Vs=psi2, nsites=1)
+psi2 = dmrg(H, psi, nsites=4)
+##psi3 = dmrg(H, psi2, nsites=1)

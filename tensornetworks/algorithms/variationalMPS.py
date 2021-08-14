@@ -1,3 +1,6 @@
+# REDO THIS; add support for nsites, etc...
+
+
 # Imports
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
