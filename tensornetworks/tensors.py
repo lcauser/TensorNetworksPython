@@ -36,7 +36,7 @@ def tensor(dims, data=None, dtype=np.complex128):
     if data is None:
         return np.zeros(dims, dtype=dtype)
     else:
-        return np.asarray(data, dtype=dtype)              
+        return np.asarray(data, dtype=dtype)       
 
 
 def randomTensor(dims, dtype=np.complex128):

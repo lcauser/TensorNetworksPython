@@ -151,7 +151,7 @@ class mps:
         self.tensors[idx-1] = A
         self.tensors[idx] = U
         
-        return None
+        return self
     
     def moveRight(self, idx, mindim=1, maxdim=0, cutoff=0):
         """
@@ -208,7 +208,7 @@ class mps:
             for i in range(idx-1):
                 self.moveRight(i, mindim, maxdim, cutoff)
             
-            for i in range(self.length-1-i):
+            for i in range(self.length-1-idx):
                 self.moveLeft(self.length-1-i, mindim, maxdim, cutoff)
         else:
             if idx < self.center:
@@ -222,7 +222,7 @@ class mps:
                     self.moveRight(self.center+i, mindim, maxdim, cutoff)
                     
         self.center = idx
-        return None
+        return self
     
     
     def norm(self):
@@ -273,37 +273,93 @@ class mps:
         
         # Move orthogonal centre across the entire MPS, applying SVD truncation
         self.orthogonalize(self.length-1 - self.center, mindim, maxdim, cutoff)
-        return None
+        return self
     
     
-    """
-        Update this to support n-sites.
-    """
-    def replacebond(self, site, A, rev=False, mindim=1, maxdim=0, cutoff=0):
-        # Group the indices together
-        dims = shape(A)
-        A, C1 = combineIdxs(A, [0, 1])
-        A, C2 = combineIdxs(A, [0, 1])
+    def replacebond(self, site, A, rev=False, mindim=1, maxdim=0, cutoff=0,
+                    nsites = 2):
+        """
+        Replace the bond in the MPS with contracted tensors via SVD.
+
+        Parameters
+        ----------
+        site : int
+            First site in the tensor.
+        A : np.ndarray
+            tensor
+        rev : bool, optional
+            False = sweeping right, true = sweeping left. The default is False.
+        mindim : int, optional
+            The minimum number of singular values to keep. The default is 1.
+        maxdim : int, optional
+            The maximum number of singular values to keep. The default is 0,
+            which defines no upper limit.
+        cutoff : float, optional
+            The truncation error of singular values. The default is 0.
+        nsites : int, optional
+            The number of sites in the tensor. The default is 2.
+
+        """
+        # Deal with nsites = 1
+        if nsites == 1:
+            # Update the tensor
+            self.tensors[site] = A
+            
+            # Move center
+            if rev and site != 0:
+                self.orthogonalize(site-1)
+            if (not rev) and site != self.length-1:
+                self.orthogonalize(site+1)
+            return self
         
-        # Do a SVD
-        U, S, V = svd(A, 1, mindim, maxdim, cutoff)
-        #U = permute(U, 0, -1)
-        #U = uncombineIdxs(U, C1)
-        #V = uncombineIdxs(V, C2)
-        #V = permute(V, 2, 0)
-        U = reshape(U, (dims[0], dims[1], shape(S)[0]))
-        V = reshape(V, (shape(S)[1], dims[2], dims[3]))
+        # Loop through applying SVDs
+        for i in range(nsites-1):
+            if rev:
+                # Deal with sweeping left
+                # Group together last indexs
+                A, C1 = combineIdxs(A, [len(shape(A))-2, len(shape(A))-1])
+                
+                # Find the site to update
+                site1 = site+nsites-1-i
+                
+                # Apply SVD
+                U, S, V = svd(A, -1, mindim, maxdim, cutoff)
+                
+                # Restore U
+                U = contract(U, S, len(shape(U))-1, 0)
+                
+                # Restore V and update tensor
+                D = 1 if site1 == self.length - 1 else shape(self.tensors[site1+1])[0]
+                V = reshape(V, (shape(S)[1], self.dim, D))
+                self.tensors[site1] = V
+            else:
+                # Deal with sweeping right
+                # Group first two indexs toegether
+                A, C1 = combineIdxs(A, [0, 1])
+                
+                # Find the site to update
+                site1 = site + i
+                
+                # Apply SVD
+                U, S, V = svd(A, -1, mindim, maxdim, cutoff)
+                
+                # Restore U
+                U = contract(U, S, len(shape(U))-1, 0)
+                U = permute(U, len(shape(U))-1, 0)
+                
+                # Restore V and update tensor
+                D = 1 if site1 == 0 else shape(self.tensors[site1-1])[2]
+                V = reshape(V, (np.shape(S)[1], D, self.dim))
+                V = permute(V, 0)
+                self.tensors[site1] = V
+                
+            # Update A
+            A = U
         
-        # Absorb singular values
-        if rev:
-            U = contract(U, S, 2, 0)
-            self.center = site
-        else:
-            V = contract(S, V, 1, 0)
-            self.center = site+1
-        
-        self.tensors[site] = U
-        self.tensors[site+1] = V
+        # Find the final site and update the tensor and center
+        site1 = site if rev else site + nsites - 1
+        self.tensors[site1] = U
+        self.center = site1
         
         return self
         
@@ -378,7 +434,7 @@ def meanfieldMPS(dim, length, A, dtype=np.complex128):
     # Deal with A
     if len(shape(A)) == 1:
         if shape(A)[0] == dim:
-            A = reshape(A, (1, np.size(A), 1))
+            A = np.reshape(A, (1, np.size(A), 1))
         else:
             raise ValueError("The tensor does not have the correct dimensions.")
     elif not shape(A) == (1, dim, 1):

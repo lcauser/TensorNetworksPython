@@ -135,41 +135,48 @@ class projMPS(LinearOperator):
 
     
     def _matvec(self, x):
-        #print('no')
-        # Retrieve tensors at the two sites
-        site1 = self.center if not self.rev else self.center - 1
-        site2 = self.center+1 if not self.rev else self.center
-        A1 = dag(self.phi.tensors[site1])
-        A2 = dag(self.phi.tensors[site2])
+        # Determine the sites
+        site1 = self.center if not self.rev else self.center - self.nsites + 1
         
-        # Retrieve edge blocks
+        # Reshape the tensor into the correct form
+        dims = [shape(self.psi.tensors[site1])[0]]
+        for i in range(self.nsites):
+            dims.append(self.psi.dim)
+        dims.append(shape(self.psi.tensors[site1+self.nsites-1])[2])
+        y = reshape(x, dims)
+        
+        # Retrieve the edge blocks
         if site1 == 0:
             left = ones((1, 1))
         else:
             left = self.blocks[site1-1]
-        if site2 == self.psi.length - 1:
+            
+        if site1 + self.nsites == self.psi.length:
             right = ones((1, 1))
         else:
-            right = self.blocks[site2+1]
+            right = self.blocks[site1+self.nsites]
         
-        # Contract
-        prod = contract(left, A1, 0, 0)
-        prod = contract(prod, A2, 2, 0)
-        prod2 = dag(contract(prod, right, 3, 0))
+        # Reverse block and contract with tensors
+        prod = permute(left, 0)
+        for i in range(self.nsites):
+            A = dag(self.phi.tensors[site1+i])
+            prod = contract(prod, A, len(shape(prod))-1, 0)
+        prod = dag(contract(prod, right, len(shape(prod))-1, 0))
         
-        if self.squared == True:
-            D1 = np.shape(self.psi.tensors[site1])[0]
-            D2 = np.shape(self.psi.tensors[site2])[2]
-            d = self.psi.dim
-            y = dag(np.reshape(x, (D1, d, d, D2)))
-            prod = contract(prod, y, 0, 0)
-            prod = trace(prod,0, 3)
-            prod = trace(prod, 0, 2)
-            prod = contract(prod, right, 0, 0)
-            prod = trace(prod, 0, 1)
-            prod2 = prod*prod2
+        # Find the contraction with x
+        if self.squared:
+            prod2 = contract(left, y, 1, 0)
+            prod2 = permute(prod2, 0)
+            for i in range(self.nsites):
+                A = dag(self.phi.tensors[site1+i])
+                prod2 = contract(prod2, A, len(shape(prod2))-1, 0)
+                prod2 = trace(prod2, 0, len(shape(prod2))-2)
+            prod2 = contract(prod2, right, 0, 1)
+            prod2 = trace(prod2, 0, 1)
+            prod *= prod2
         
-        return prod2.flatten()
+        return prod.flatten()            
+        
     
     
     def opShape(self):

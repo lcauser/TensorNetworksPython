@@ -142,39 +142,45 @@ class projMPSMPO(LinearOperator):
 
     
     def _matvec(self, x):
-        #print('yes')
         # Determine the sites
-        site1 = self.center if not self.rev else self.center - 1
-        site2 = self.center + 1 if not self.rev else self.center
-        
-        # Fetch the tensors
-        M1 = self.O.tensors[site1]
-        M2 = self.O.tensors[site2]
+        site1 = self.center if not self.rev else self.center - self.nsites + 1
         
         # Reshape the tensor into the correct form
-        D1 = np.shape(self.psi.tensors[site1])[0]
-        D2 = np.shape(self.psi.tensors[site2])[2]
-        d = self.psi.dim
-        y = np.reshape(x, (D1, d, d, D2))
+        dims = [shape(self.psi.tensors[site1])[0]]
+        for i in range(self.nsites):
+            dims.append(self.psi.dim)
+        dims.append(shape(self.psi.tensors[site1+self.nsites-1])[2])
+        y = reshape(x, dims)
         
-        # Retrieve edge blocks
+        # Retrieve the edge blocks
         if site1 == 0:
             left = ones((1, 1, 1))
         else:
             left = self.blocks[site1-1]
-        if site2 == self.psi.length - 1:
+            
+        if site1 + self.nsites == self.psi.length:
             right = ones((1, 1, 1))
         else:
-            right = self.blocks[site2+1]
+            right = self.blocks[site1+self.nsites]
+        
+        # Contract the tensor with the left block
+        prod = contract(left, y, 2, 0)
+        prod = permute(prod, 1)
+        
+        # Loop through nsites and contract
+        for i in range(self.nsites):
+            # Fetch the site tensor
+            M = self.O.tensors[site1+i]
             
-        # Do the contractions
-        prod = contract(left, M1, 1, 0)
-        prod = contract(prod, y, 1, 0)
-        prod = trace(prod, 2, 4)
-        prod = contract(prod, M2, 2, 0)
-        prod = trace(prod, 2, 5)
-        prod = contract(prod, right, 2, 2)
-        prod = trace(prod, 3, 5)
+            # Contract
+            prod = contract(prod, M, len(shape(prod))-1, 0)
+            prod = trace(prod, 1, len(shape(prod))-2)
+        
+        # Contract with right block
+        #print(shape(prod))
+        #print(shape(right))
+        prod = contract(prod, right, 1, 2)
+        prod = trace(prod, len(shape(prod))-3, len(shape(prod))-1)
         
         return prod.flatten()
     

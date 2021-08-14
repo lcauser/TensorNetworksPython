@@ -26,9 +26,10 @@ H = uniformMPO(2, N, M)
 H.tensors[0] = M1
 
 # Make equilibrium MPS
-B = tn.tensor((1, 2, 1), [[[np.sqrt(c)]], [[np.sqrt(1-c)]]])
+B = [np.sqrt(c), np.sqrt(1-c)]
 #B = tn.tensor((1, 2, 1), [[[0]], [[1]]])
-#psi = productMPS(2, N, B)
-#psi = randomMPS(2, N, 1)
+#psi = meanfieldMPS(2, N, B)
+psi = randomMPS(2, N, 1)
 
-psi2 = dmrg(H, psi)
+psi2 = dmrg(H, psi, nsites=1)
+psi3 = dmrg(H, psi, Vs=psi2, nsites=1)
