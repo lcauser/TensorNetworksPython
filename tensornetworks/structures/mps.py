@@ -1,3 +1,8 @@
+"""
+    The class for matrix product states (mps), and functions to manipulate
+    and work with them.
+"""
+
 # Imports
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
@@ -7,6 +12,21 @@ from tensornetworks.sitetypes1d import sitetypes1d
 class mps:
     
     def __init__(self, dim, length, dtype=np.complex128):
+        """
+        Create a matrix product state class.
+
+        Parameters
+        ----------
+        dim : int
+            Physical dimension of each site on the MPS.
+        length : int
+            Length of the MPS.
+        dtype : type, optional
+            Type of the tensors within the MPS. The default is np.complex128.
+
+        """
+        
+        # Store the relevent information for the MPS
         self.dim = dim
         self.length = length
         self.dtype = dtype
@@ -60,18 +80,43 @@ class mps:
             
     
     def createStructure(self):
+        """ Creates the structure of an MPS, full of zero tensors. """
+        
         tensors = []
         for i in range(self.length):
             tensors.append(tensor((1, self.dim, 1)))
         self.tensors = tensors
-        return self
+        return None
     
     
     def bondDim(self, idx):
-        return np.shape(self.tensors[idx])[2]
+        """
+        Find the bond dimension after site idx
+
+        Parameters
+        ----------
+        idx : int
+            Site number.
+
+        Returns
+        -------
+        int
+            Bond dimension.
+
+        """
+        return shape(self.tensors[idx])[2]
     
     
     def maxBondDim(self):
+        """
+        Find the maximum bond dimension within the MPS.
+
+        Returns
+        -------
+        dim : int
+            Maximum bond dimension.
+
+        """
         dim = 1
         for idx in range(self.length):
             dim = max(dim, self.bondDim(idx))
@@ -79,6 +124,22 @@ class mps:
             
     
     def moveLeft(self, idx, mindim=1, maxdim=0, cutoff=0):
+        """
+        Move the gauge from site idx to the left.
+
+        Parameters
+        ----------
+        idx : int
+            Site index
+        mindim : int, optional
+            The minimum number of singular values to keep. The default is 1.
+        maxdim : int, optional
+            The maximum number of singular values to keep. The default is 0,
+            which defines no upper limit.
+        cutoff : float, optional
+            The truncation error of singular values. The default is 0.
+
+        """
         # Get the SVD at the site
         U, S, V = svd(self.tensors[idx], 0, mindim, maxdim, cutoff)
         
@@ -90,9 +151,25 @@ class mps:
         self.tensors[idx-1] = A
         self.tensors[idx] = U
         
-        return self
+        return None
     
     def moveRight(self, idx, mindim=1, maxdim=0, cutoff=0):
+        """
+        Move the gauge from site idx to the right.
+
+        Parameters
+        ----------
+        idx : int
+            Site index
+        mindim : int, optional
+            The minimum number of singular values to keep. The default is 1.
+        maxdim : int, optional
+            The maximum number of singular values to keep. The default is 0,
+            which defines no upper limit.
+        cutoff : float, optional
+            The truncation error of singular values. The default is 0.
+
+        """
         # Get the SVD at the site
         U, S, V = svd(self.tensors[idx], 2, mindim, maxdim, cutoff)
         
@@ -108,27 +185,58 @@ class mps:
     
     
     def orthogonalize(self, idx, mindim=1, maxdim=0, cutoff=0):
+        """
+        Move the orthogonal centre to idx.
+
+        Parameters
+        ----------
+        idx : int
+            Site index
+        mindim : int, optional
+            The minimum number of singular values to keep. The default is 1.
+        maxdim : int, optional
+            The maximum number of singular values to keep. The default is 0,
+            which defines no upper limit.
+        cutoff : float, optional
+            The truncation error of singular values. The default is 0.
+
+        """
+        
         # Check to see if already in a canonical form
         if self.center == None:
-            for i in range(self.length-1):
+            # Move from both the left and right to the correct site
+            for i in range(idx-1):
+                self.moveRight(i, mindim, maxdim, cutoff)
+            
+            for i in range(self.length-1-i):
                 self.moveLeft(self.length-1-i, mindim, maxdim, cutoff)
-            self.center = 0
-        
-        
-        if idx < self.center:
-            for i in range(self.center-idx):
-                self.moveLeft(self.center-i, mindim, maxdim, cutoff)
-            self.center = idx
-        
-        if idx > self.center:
-            for i in range(idx-self.center):
-                self.moveRight(self.center+i, mindim, maxdim, cutoff)
-            self.center = idx
-        
-        return self
+        else:
+            if idx < self.center:
+                # Move left to the appropiate site
+                for i in range(self.center-idx):
+                    self.moveLeft(self.center-i, mindim, maxdim, cutoff)
+            
+            if idx > self.center:
+                # Move right to the appropiate site
+                for i in range(idx-self.center):
+                    self.moveRight(self.center+i, mindim, maxdim, cutoff)
+                    
+        self.center = idx
+        return None
     
     
     def norm(self):
+        """
+        Efficiently calculate the norm of the MPS through the orthogonal
+        center.
+
+        Returns
+        -------
+        norm: float/complex
+            Norm of the MPS
+
+        """
+        # Orthogonalize
         if self.center == None:
             self.orthogonalize(0)
         
@@ -136,16 +244,36 @@ class mps:
     
     
     def normalize(self):
+        """ Normalize the MPS. """
+        
+        # Calculate the norm and rescale the orthogonal centre.
         norm = self.norm()
         self.tensors[self.center] *= (1/norm)
+        return None
     
     
     def truncate(self, mindim=1, maxdim=0, cutoff=0):
+        """
+        Truncate the MPS though SVDs 
+
+        Parameters
+        ----------
+        mindim : int, optional
+            The minimum number of singular values to keep. The default is 1.
+        maxdim : int, optional
+            The maximum number of singular values to keep. The default is 0,
+            which defines no upper limit.
+        cutoff : float, optional
+            The truncation error of singular values. The default is 0.
+
+        """
+        # If not at the edge, move orthogonal centre to the edge
         if self.center != 0 and self.center != self.length-1:
             self.orthogonalize(self.length-1)
         
+        # Move orthogonal centre across the entire MPS, applying SVD truncation
         self.orthogonalize(self.length-1 - self.center, mindim, maxdim, cutoff)
-        return self
+        return None
     
     
     """
@@ -153,7 +281,7 @@ class mps:
     """
     def replacebond(self, site, A, rev=False, mindim=1, maxdim=0, cutoff=0):
         # Group the indices together
-        dims = np.shape(A)
+        dims = shape(A)
         A, C1 = combineIdxs(A, [0, 1])
         A, C2 = combineIdxs(A, [0, 1])
         
@@ -163,8 +291,8 @@ class mps:
         #U = uncombineIdxs(U, C1)
         #V = uncombineIdxs(V, C2)
         #V = permute(V, 2, 0)
-        U = reshape(U, (dims[0], dims[1], np.shape(S)[0]))
-        V = reshape(V, (np.shape(S)[1], dims[2], dims[3]))
+        U = reshape(U, (dims[0], dims[1], shape(S)[0]))
+        V = reshape(V, (shape(S)[1], dims[2], dims[3]))
         
         # Absorb singular values
         if rev:
@@ -181,9 +309,29 @@ class mps:
         
 
 
-
-
 def randomMPS(dim, length, bondDim=1, normalize=True, dtype=np.complex128):
+    """
+    Create a MPS with random tensors.
+
+    Parameters
+    ----------
+    dim : int
+        Physical dimension of each site on the MPS.
+    length : int
+        Length of the MPS.
+    bondDim : int, optional
+        Bond dimension of the MPS. The default is 1.
+    normalize : bool, optional
+        Should the MPS be normalized. The default is True.
+    dtype : type, optional
+        Type of the tensors within the MPS. The default is np.complex128.
+
+    Returns
+    -------
+    psi : mps
+        Random MPS.
+
+    """
     # Create MPS
     psi = mps(dim, length, dtype)
     
@@ -200,18 +348,45 @@ def randomMPS(dim, length, bondDim=1, normalize=True, dtype=np.complex128):
     
     # Move orthogonal centre to first site and normalize
     psi.orthogonalize(0)
+    psi.tensors[0] = randomTensor(shape(psi.tensors[0]), dtype)
     if normalize:
-        psi *= 1 / psi.norm()
-
-    
+        psi *= 1 / psi.norm()    
     return psi
 
 
 def meanfieldMPS(dim, length, A, dtype=np.complex128):
+    """
+    Create an MPS with identical tensors (bond dimension one).
+
+    Parameters
+    ----------
+    dim : int
+        Physical dimension of each site on the MPS.
+    length : int
+        Length of the MPS.
+    A : np.ndarray
+        Rank one tensor of size dim
+    dtype : type, optional
+        Type of the tensors within the MPS. The default is np.complex128.
+
+    Returns
+    -------
+    psi : MPS
+        Mean field MPS.
+
+    """
+    # Deal with A
+    if len(shape(A)) == 1:
+        if shape(A)[0] == dim:
+            A = reshape(A, (1, np.size(A), 1))
+        else:
+            raise ValueError("The tensor does not have the correct dimensions.")
+    elif not shape(A) == (1, dim, 1):
+        raise ValueError("The tensor does not have the correct dimensions.")
+    A = tensor(shape(A), A, dtype)
+    
     # Create MPS
     psi = mps(dim, length, dtype)
-    A = np.reshape(A, (1, np.size(A), 1))
-    A = tensor(np.shape(A), A, dtype)
     for i in range(length):
         psi.tensors[i] = copy.deepcopy(A)
     
@@ -219,6 +394,22 @@ def meanfieldMPS(dim, length, A, dtype=np.complex128):
 
 
 def productMPS(s : sitetypes1d, states):
+    """
+    Create a product (bond dimension one) MPS from a list of states.
+
+    Parameters
+    ----------
+    s : sitetypes1d
+        Site types with state names.
+    states : list
+        List of states.
+
+    Returns
+    -------
+    psi : mps
+        Product MPS.
+
+    """
     # Check list of states
     if not isinstance(states, list):
         raise ValueError("States must be a list of product states.")
@@ -230,7 +421,22 @@ def productMPS(s : sitetypes1d, states):
     
     return psi
 
+
 def dot(psi : mps, phi : mps):
+    """
+    Calculate the inner product between two MPS.
+
+    Parameters
+    ----------
+    psi : mps
+    phi : mps
+
+    Returns
+    -------
+    product: number
+        Scalar product of two MPS.
+
+    """
     # Initilize at first site
     A1 = psi.tensors[0]
     A2 = dag(phi.tensors[0])

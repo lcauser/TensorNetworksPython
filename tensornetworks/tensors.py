@@ -2,7 +2,6 @@
     Provides functions to create tensors (as numpy arrays) and manipulate them.
 """
 
-
 # Imports
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
@@ -92,7 +91,7 @@ def contract(x, y, idx1, idx2):
         storage = np.tensordot(x, y, axes=(idx1, idx2))
         return tensor(np.shape(storage), storage, storage.dtype)
     else:
-        raise("The dimensions of contracting indexes do not match.")
+        raise ValueError("The dimensions of contracting indexes do not match.")
 
 
 def trace(x, idx1, idx2):
@@ -120,7 +119,7 @@ def trace(x, idx1, idx2):
         storage = np.trace(x, axis1=idx1, axis2=idx2)
         return tensor(np.shape(storage), storage, storage.dtype)
     else:
-        raise("The dimensions of contracting indexes do not match.")
+        raise ValueError("The dimensions of contracting indexes do not match.")
         return 0
 
 
@@ -287,8 +286,7 @@ def svd(x, idx=-1, mindim=1, maxdim=0, cutoff=0):
     
     # Make sure axis is valid
     if not (isinstance(idx, int) and idx >= 0 and idx < size):
-        print("axis must be an integer which refers to a valid index.")
-        return 0
+        raise ValueError("axis must be an integer which refers to a valid index.")
     
     # Group together all the indexs
     idxs = np.linspace(0, len(np.shape(y))-1, len(np.shape(y)), dtype=int)

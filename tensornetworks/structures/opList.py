@@ -1,3 +1,9 @@
+"""
+    Operator lists store lists of many-body operators which can act on an MPS.
+    It makes use of sitetypes to build operators efficiently. Also contains
+    efficient ways of calculating multiple expectations simultanteously.
+"""
+
 # Imports
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
@@ -10,6 +16,18 @@ import numbers
 class opList:
     
     def __init__(self, s : sitetypes1d, length):
+        """
+        Create a list of operators.
+
+        Parameters
+        ----------
+        s : sitetypes1d
+            Site types with operator names.
+        length : int
+            Length of lattice.
+
+        """
+        # Store information
         self.length = length
         self.sitetype = s
         self.ops = []
@@ -40,6 +58,19 @@ class opList:
     
     
     def add(self, ops, sites, coeff=1):
+        """
+        Add an operator to the list.
+
+        Parameters
+        ----------
+        ops : list
+            List of operator names
+        sites : list
+            List of sites they act on.
+        coeff : number, optional
+            coefficient of the operator. The default is 1.
+
+        """
         if not isinstance(ops, list):
             ops = [ops]
         if not isinstance(sites, list):
@@ -69,10 +100,20 @@ class opList:
         self.sites.append(sites)
         self.coeffs.append(coeff)
         
-        return self
+        return None
     
     
     def siteRange(self):
+        """
+        Calculate the 'locality' of the list of operators i.e. the maximum 
+        range of sites.
+
+        Returns
+        -------
+        rng : int
+            The maximum interaction range.
+
+        """
         rng = 1
         for sites in self.sites:
             rng = max(rng, max(sites)-min(sites)+1)
@@ -80,6 +121,20 @@ class opList:
     
     
     def siteIndexs(self, site):
+        """
+        Return the indexs of all operators in the list which start at a site.
+
+        Parameters
+        ----------
+        site : int
+            First operator site.
+
+        Returns
+        -------
+        idxs : list
+            List of indexs
+
+        """
         idxs = []
         for i in range(len(self.sites)):
             if min(self.sites[i]) == site:
@@ -88,10 +143,27 @@ class opList:
     
     
     def toTensor(self, idx):
+        """
+        Create the tensor object for an operator in the list.
+
+        Parameters
+        ----------
+        idx : int
+            Operator index.
+
+        Returns
+        -------
+        tensor: np.ndarray
+            The tensor representation of the operator
+
+        """
+        # Fetch the relevent information and find the interaction range
         ops = self.ops[idx]
         sites = self.sites[idx]
         rng = min(self.siteRange(), self.length-min(sites))
         
+        # Create the tensor through taking a tensor product. Insert identity
+        # where no operator is given.
         prod = tensor((1, 1), [[1]])
         for site in range(rng):
             if min(sites)+site in sites:
@@ -103,11 +175,24 @@ class opList:
                                                    self.sitetype.dim, 1))
             prod = contract(prod, op, len(np.shape(prod))-1, 0)
         prod = trace(prod, 0, len(np.shape(prod))-1)
-        
         return self.coeffs[idx]*prod
         
     
     def siteTensor(self, site):
+        """
+        Calculate the tensor which acts from site to site + interaction range.
+
+        Parameters
+        ----------
+        site : int
+            First site.
+
+        Returns
+        -------
+        tensor: np.ndarray
+            Sum of all tensors starting at the site.
+
+        """
         idxs = self.siteIndexs(site)
         if len(idxs) == 0:
             return False
@@ -119,6 +204,20 @@ class opList:
 
 
 def addOpLists(opList1 : opList, opList2 : opList):
+    """
+    Add operator lists.
+
+    Parameters
+    ----------
+    opList1 : opList
+    opList2 : opList
+
+    Returns
+    -------
+    opList3 : opList
+        Summed operator lists.
+
+    """
     if opList1.sitetype is not opList2.sitetype:
         raise ValueError("The operator lists must share the same site types.")
     opList3 = copy.deepcopy(opList1)
@@ -131,6 +230,22 @@ def addOpLists(opList1 : opList, opList2 : opList):
     
     
 def opExpectation(ops : opList, psi : mps):
+    """
+    Calculate the expectation values of all operators in the list on an MPS.
+    Does it efficiently by constructing the dot projection of an MPS,
+    and reusing tensor contractions.
+
+    Parameters
+    ----------
+    ops : opList
+    psi : mps
+
+    Returns
+    -------
+    expectations : list
+        List of expectation values
+
+    """
     # Create a projector of the dot product
     projDot = projMPS(psi, psi)
     
@@ -171,7 +286,27 @@ def opExpectation(ops : opList, psi : mps):
     return expectations
             
         
-def applyOp(psi, sitetype, ops, sites, coeff):
+def applyOp(psi, sitetype, ops, sites, coeff = 1):
+    """
+    Apply an operator to an MPS.
+
+    Parameters
+    ----------
+    psi : mps
+    sitetype : sitetypes1d
+    ops : list
+        List of operators
+    sites : list
+        List of sites
+    coeff : number, optional
+        coefficient of operator. The default is 1.
+
+    Returns
+    -------
+    psi : mps
+        MPS with operator applied to it.
+
+    """
     # Move orthogonal center to first affected site
     psi.orthogonalize(sites[0])
     
