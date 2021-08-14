@@ -7,7 +7,7 @@
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
 from tensornetworks.tensors import *
-from tensornetworks.sitetypes1d import sitetypes1d
+from tensornetworks.sitetypes import sitetypes
 
 class mps:
     
@@ -449,13 +449,13 @@ def meanfieldMPS(dim, length, A, dtype=np.complex128):
     return psi
 
 
-def productMPS(s : sitetypes1d, states):
+def productMPS(s : sitetypes, states):
     """
     Create a product (bond dimension one) MPS from a list of states.
 
     Parameters
     ----------
-    s : sitetypes1d
+    s : sitetypes
         Site types with state names.
     states : list
         List of states.

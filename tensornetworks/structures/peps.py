@@ -2,7 +2,7 @@
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
 from tensornetworks.tensors import *
-from tensornetworks.sitetypes1d import sitetypes1d
+from tensornetworks.sitetypes import sitetypes
 from tensornetworks.structures.mps import mps
 
 class peps:
@@ -243,7 +243,7 @@ def meanfieldPEPS(dim, length, A, dtype=np.complex128):
     return psi
 
 
-def productPEPS(s : sitetypes1d, states):
+def productPEPS(s : sitetypes, states):
     # Create an empty PEPS
     psi = peps(s.dim, [len(states), len(states[0])])
     

@@ -1,4 +1,4 @@
-from tensornetworks.sitetypes1d import sitetypes1d
+from tensornetworks.sitetypes import sitetypes
 from tensornetworks.tensors import tensor
 import numpy as np
 
@@ -10,7 +10,7 @@ def spinHalf():
     """
     
     # Make sitetype
-    st = sitetypes1d(2)
+    st = sitetypes(2)
     
     # Add states
     st.addState("up", tensor(2, np.asarray([1, 0], dtype=np.complex128)))

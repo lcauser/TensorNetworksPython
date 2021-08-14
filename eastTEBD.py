@@ -1,6 +1,6 @@
 from tensornetworks.structures.mps import *
 from tensornetworks.structures.mpo import *
-from tensornetworks.lattices.mps import spinHalf
+from tensornetworks.lattices.spinHalf import spinHalf
 import numpy as np
 import tensornetworks.tensors as tn
 from tensornetworks.structures.opList import opList

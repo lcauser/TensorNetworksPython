@@ -8,20 +8,20 @@
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
 from tensornetworks.tensors import *
-from tensornetworks.sitetypes1d import sitetypes1d 
+from tensornetworks.sitetypes import sitetypes 
 from tensornetworks.structures.mps import mps
 from tensornetworks.structures.projMPS import projMPS
 import numbers
 
 class opList:
     
-    def __init__(self, s : sitetypes1d, length):
+    def __init__(self, s : sitetypes, length):
         """
         Create a list of operators.
 
         Parameters
         ----------
-        s : sitetypes1d
+        s : sitetypes
             Site types with operator names.
         length : int
             Length of lattice.
@@ -293,7 +293,7 @@ def applyOp(psi, sitetype, ops, sites, coeff = 1):
     Parameters
     ----------
     psi : mps
-    sitetype : sitetypes1d
+    sitetype : sitetypes
     ops : list
         List of operators
     sites : list

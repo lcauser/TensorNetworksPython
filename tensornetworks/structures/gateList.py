@@ -8,7 +8,7 @@
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
 from tensornetworks.tensors import *
-from tensornetworks.sitetypes1d import sitetypes1d 
+from tensornetworks.sitetypes import sitetypes
 from tensornetworks.algorithms.dmrg import dmrg
 from tensornetworks.structures.opList import opList
 from tensornetworks.structures.mps import mps

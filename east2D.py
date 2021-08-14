@@ -1,8 +1,7 @@
 from tensornetworks.structures.peps import *
-from tensornetworks.lattices.mps import spinHalf
 import numpy as np
 import tensornetworks.tensors as tn
-from tensornetworks.lattices.mps import spinHalf
+from tensornetworks.lattices.spinHalf import spinHalf
 import copy
 
 # Parameters

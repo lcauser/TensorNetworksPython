@@ -1,15 +1,35 @@
+"""
+    Site types allow users to create custom lattice defintions, by giving names
+    to local states and operators. It can then be used to generate tensor
+    products, finding products and hermitians, etc.
+"""
+
 from tensornetworks.tensors import tensor, contract
 import numpy as np
 
-class sitetypes1d:
+class sitetypes:
     
     def __init__(self, dim):
+        """
+        Define a lattice type, with states and operators.
+
+        Parameters
+        ----------
+        dim : int
+            Local physical dimensions.
+
+        """
+        # Save the dimension
         self.dim = dim
+        
+        # Create arrays to store states and operators
         self.stateNames = []
         self.states = []
         self.opNames = []
         self.ops = []
         self.opDags = []
+        
+        # A counter for new operators
         self.temp = 0
         
     
@@ -114,12 +134,31 @@ class sitetypes1d:
     
     
     def opProd(self, ops):
+        """
+        Take the product of local operators, and return the named operator.
+        Defines a new operator if it cannot find an existing equivalent.
+
+        Parameters
+        ----------
+        ops : list
+            List of operators.
+
+        Returns
+        -------
+        op : str
+            Operator name
+
+        """
+        # Make sure it's a list
         if not isinstance(ops, list):
             ops = [ops]
+            
+        # Start the operator product with the identity, and contract operators
         prod = self.op("id")
         for op in ops:
             prod = contract(prod, self.op(op), 1, 0)
         
+        # Check to see if the operator is defined in the op list
         for idx in range(len(self.ops)):
             if np.all(np.abs(prod - self.ops[idx]) < 10**-14):
                 return self.opNames[idx]
