@@ -1,9 +1,17 @@
+"""
+    Example of DMRG on a biased stochastic East model.
+    The Hamiltonian must be constructed as an efficent MPO.
+    We show a random MPS, or mean field MPS as an inital guess.
+    Afterwards, we measure occupations and NN correlations.
+"""
+
 from tensornetworks.structures.mps import *
 from tensornetworks.structures.mpo import *
 from tensornetworks.lattices.spinHalf import spinHalf
 import numpy as np
 import tensornetworks.tensors as tn
 from tensornetworks.algorithms.dmrg import dmrg
+from tensornetworks.structures.opList import opList, opExpectation
 
 # Parameters
 c = 0.5
@@ -27,9 +35,20 @@ H.tensors[0] = M1
 
 # Make equilibrium MPS
 B = [np.sqrt(c), np.sqrt(1-c)]
-#B = tn.tensor((1, 2, 1), [[[0]], [[1]]])
-#psi = meanfieldMPS(2, N, B)
-psi = randomMPS(2, N, 1)
+psi = meanfieldMPS(2, N, B)
+#psi = randomMPS(2, N, 1)
 
-psi2 = dmrg(H, psi, nsites=4)
-##psi3 = dmrg(H, psi2, nsites=1)
+# Do DMRG
+psi2 = dmrg(H, psi, nsites=2)
+
+# Measure occupations
+ops = opList(sh, N)
+for i in range(N):
+    ops.add("pu", i)
+occupations = opExpectation(ops, psi2)
+
+# Measure NN correlations
+ops = opList(sh, N)
+for i in range(N-1):
+    ops.add(["pu", "pu"], [i, i+1])
+correlations = opExpectation(ops, psi2)
