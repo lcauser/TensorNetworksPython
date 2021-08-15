@@ -5,7 +5,6 @@ from tensornetworks.tensors import *
 from tensornetworks.sitetypes import sitetypes 
 from tensornetworks.structures.mps import mps
 from tensornetworks.structures.projMPS import projMPS
-from tensornetworks.structures.gateList import gateList
 import numbers
 
 class opList2d:
@@ -43,44 +42,34 @@ class opList2d:
         return self.__add__(other)
     
     
-    def add(self, ops, sites, coeff=1):
+    def add(self, ops, sites, direction=0, coeff=1):
         if not isinstance(ops, list):
             ops = [ops]
         if not isinstance(sites, list):
-            sites = [sites]
-        
-        # Check the length of ops and sites are the same
-        if len(ops) != len(sites):
-            raise ValueError("The operator and site list must be of equal size.")
+            raise ValueError("The sites must be a list of two indexs to a first tensor.")
+        if len(sites) != 2:
+            raise ValueError("The site must be an a list of two ints.")
         
         for op in ops:
             if op not in self.sitetype.opNames:
                 raise ValueError("The operator is not defined.")
-        
-        for site in sites:
-            if not isinstance(site, list):
-                raise ValueError("The site must be an a list of two ints.")
             
-        
         if not isinstance(coeff, numbers.Number):
             raise ValueError("The site must be a real or complex number.")
             
-        
-        # Sort the operator and site list
-        ops = [op for _, op in sorted(zip(sites, ops))]
-        sites = sorted(sites)
-        
+                
         # Add to the operator list
         self.ops.append(ops)
         self.sites.append(sites)
         self.coeffs.append(coeff)
+        self.directions.append(direction)
         
         return self
     
-    def siteIndexs(self, sites):
+    def siteIndexs(self, sites, direction):
         idxs = []
         for i in range(len(self.sites)):
-            if min(self.sites[i]) == sites:
+            if self.sites[i] == sites and self.directions[i] == direction:
                 idxs.append(i)
         return idxs
 
@@ -100,52 +89,3 @@ def applyOp(psi, sitetype, ops, sites, coeff):
     
     return psi
         
-
-def trotterize(ops : opList2d, timestep : float, order : int = 1):
-    # Create the gatelist and find the interaction range
-    gl = gateList(ops.length)
-
-    # Create horizontal even bonds
-    for i in range(ops.length[0]):
-        for j in range(ops.length[1]):
-            if j % 0 == 0:
-                idxs = gl.siteIndexs([i, j])
-                for idx in idxs:
-                    names = ops.ops[idx]
-                    sites = ops.sites[idx]
-                    coeff = ops.coeffs[idx]
-                    
-
-    if order == 1:
-        for i in range(rng):
-            gates = []
-            sites = []
-            site = i
-            while site < ops.length:
-                gate = ops.siteTensor(site)
-                if type(gate) == np.ndarray:
-                    sites.append(site)
-                    gates.append(exp(timestep*gate, [2*i+1 for i in range(gateSize(gate))]))
-                site += rng
-            
-            gl.add(gates, sites)
-    elif order == 2:
-        for i in range(rng):
-            gates = []
-            sites = []
-            site = i
-            ts = timestep if i == rng - 1 else timestep / 2
-            while site < ops.length:
-                gate = ops.siteTensor(site)
-                if type(gate) == np.ndarray:
-                    sites.append(site)
-                    gates.append(exp(ts*gate, [2*i+1 for i in range(gateSize(gate))]))
-                site += rng
-            
-            gl.add(gates, sites)
-        
-        # All backwards
-        for i in range(rng - 1):
-            gl.add(gl.gates[rng-2-i], gl.sites[rng-2-i])
-            
-    return gl

@@ -330,7 +330,7 @@ class mps:
                 
                 # Restore V and update tensor
                 D = 1 if site1 == self.length - 1 else shape(self.tensors[site1+1])[0]
-                V = reshape(V, (shape(S)[1], self.dim, D))
+                V = reshape(V, (shape(S)[1], shape(self.tensors[site1])[1], D))
                 self.tensors[site1] = V
             else:
                 # Deal with sweeping right
@@ -349,7 +349,7 @@ class mps:
                 
                 # Restore V and update tensor
                 D = 1 if site1 == 0 else shape(self.tensors[site1-1])[2]
-                V = reshape(V, (np.shape(S)[1], D, self.dim))
+                V = reshape(V, (np.shape(S)[1], D, shape(self.tensors[site1])[1]))
                 V = permute(V, 0)
                 self.tensors[site1] = V
                 

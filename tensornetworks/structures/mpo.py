@@ -29,6 +29,7 @@ class mpo:
         self.dim = dim
         self.length = length
         self.dtype = dtype
+        self.center = None
         
         # Create the structure of the mps
         self.createStructure()
@@ -82,6 +83,108 @@ class mpo:
         return self
     
     
+    def moveLeft(self, idx, mindim=1, maxdim=0, cutoff=0):
+        """
+        Move the gauge from site idx to the left.
+
+        Parameters
+        ----------
+        idx : int
+            Site index
+        mindim : int, optional
+            The minimum number of singular values to keep. The default is 1.
+        maxdim : int, optional
+            The maximum number of singular values to keep. The default is 0,
+            which defines no upper limit.
+        cutoff : float, optional
+            The truncation error of singular values. The default is 0.
+
+        """
+        # Get the SVD at the site
+        U, S, V = svd(self.tensors[idx], 0, mindim, maxdim, cutoff)
+        
+        # Get the site to the left
+        M = self.tensors[idx-1]
+        M = contract(M, V, 3, 1)
+        M = contract(M, S, 3, 1)
+        
+        self.tensors[idx-1] = M
+        self.tensors[idx] = U
+        
+        return self
+    
+    def moveRight(self, idx, mindim=1, maxdim=0, cutoff=0):
+        """
+        Move the gauge from site idx to the right.
+
+        Parameters
+        ----------
+        idx : int
+            Site index
+        mindim : int, optional
+            The minimum number of singular values to keep. The default is 1.
+        maxdim : int, optional
+            The maximum number of singular values to keep. The default is 0,
+            which defines no upper limit.
+        cutoff : float, optional
+            The truncation error of singular values. The default is 0.
+
+        """
+        # Get the SVD at the site
+        U, S, V = svd(self.tensors[idx], 3, mindim, maxdim, cutoff)
+        
+        # Get the site to the right
+        M = self.tensors[idx+1]
+        S = contract(S, V, 1, 0)
+        M = contract(S, M, 1, 0)
+        
+        self.tensors[idx+1] = M
+        self.tensors[idx] = U
+        
+        return self
+    
+    
+    def orthogonalize(self, idx, mindim=1, maxdim=0, cutoff=0):
+        """
+        Move the orthogonal centre to idx.
+
+        Parameters
+        ----------
+        idx : int
+            Site index
+        mindim : int, optional
+            The minimum number of singular values to keep. The default is 1.
+        maxdim : int, optional
+            The maximum number of singular values to keep. The default is 0,
+            which defines no upper limit.
+        cutoff : float, optional
+            The truncation error of singular values. The default is 0.
+
+        """
+        
+        # Check to see if already in a canonical form
+        if self.center == None:
+            # Move from both the left and right to the correct site
+            for i in range(idx-1):
+                self.moveRight(i, mindim, maxdim, cutoff)
+            
+            for i in range(self.length-1-idx):
+                self.moveLeft(self.length-1-i, mindim, maxdim, cutoff)
+        else:
+            if idx < self.center:
+                # Move left to the appropiate site
+                for i in range(self.center-idx):
+                    self.moveLeft(self.center-i, mindim, maxdim, cutoff)
+            
+            if idx > self.center:
+                # Move right to the appropiate site
+                for i in range(idx-self.center):
+                    self.moveRight(self.center+i, mindim, maxdim, cutoff)
+                    
+        self.center = idx
+        return self
+    
+    
     def bondDim(self, idx):
         """
         Find the bond dimension after site idx.
@@ -97,7 +200,7 @@ class mpo:
             Bond dimension.
 
         """
-        return shape(tensors[idx])[3]
+        return shape(self.tensors[idx])[3]
     
     
     def maxBondDim(self):
@@ -153,6 +256,27 @@ def uniformMPO(dim, length, M, dtype=np.float64):
         O.tensors[1+i] = M
     O.tensors[length-1] = M[:, :, :, 0:1]
     return O
+
+
+def bMPO(length):
+    """
+    Create a boundary MPO of ones for PEPS environments.
+
+    Parameters
+    ----------
+    length : int
+        Length of MPO.
+
+    Returns
+    -------
+    bMPO : mpo
+        boundary MPO.
+
+    """
+    bMPO = mpo(1, length)
+    for i in range(length):
+        bMPO.tensors[i] = np.ones((1, 1, 1, 1))
+    return bMPO
 
 
 def applyMPO(O : mpo, psi : mps):

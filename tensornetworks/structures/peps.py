@@ -1,3 +1,9 @@
+"""
+    PEPS are the two-dimensional generalizations of matrix product states.
+    They provide a strong numerical variational class to do optimization,
+    and minimization of observables.
+"""
+
 # Imports
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
@@ -9,6 +15,21 @@ class peps:
     
     def __init__(self, dim : int, length, collapsed = False,
                  dtype=np.complex128):
+        """
+        Create a PEPS.
+
+        Parameters
+        ----------
+        dim : int
+            physical dimension
+        length : list / int
+            List of rectangle sizes / square length.
+        collapsed : bool, optional
+            Collapse the physical dimension?. The default is False.
+        dtype : type, optional
+            Data type. The default is np.complex128.
+
+        """
         # Save the phyiscal dimension
         self.dim = dim
         
@@ -45,6 +66,7 @@ class peps:
             
     
     def createStructure(self):
+        """ Create the structure of the PEPS. """
         tensors = []
         for i in range(self.length[0]):
             tensorsX = []
@@ -55,10 +77,28 @@ class peps:
                     tensorsX.append(tensor((1, 1, 1, 1)))
             tensors.append(tensorsX)
         self.tensors = tensors
-        return self
+        return None
     
     
-    def bondDim(self, idx1, idx2, vertical=1):
+    def bondDim(self, idx1, idx2, vertical=0):
+        """
+        Find the bond dimension at a site to the right or below.
+
+        Parameters
+        ----------
+        idx1 : int
+            y index
+        idx2 : int
+            x index
+        vertical : bool, optional
+            Look to the right (0) or below (1). The default is 0.
+
+        Returns
+        -------
+        bondDim : int
+            The bond dimension.
+
+        """
         if vertical:
             return np.shape(self.tensors[idx1][idx2])[2]
         else:
@@ -66,6 +106,15 @@ class peps:
     
     
     def maxBondDim(self):
+        """
+        Find the maximum bond dimension
+
+        Returns
+        -------
+        bondDim : int
+            The maximum bond dimension.
+
+        """
         maxdim = 0
         for i in range(self.length[0]):
             for j in range(self.length[1]):
@@ -76,10 +125,33 @@ class peps:
     
     
     def norm(self, chi=0):
+        """
+        Calculate the norm through it's dot product.
+
+        Parameters
+        ----------
+        chi : int, optional
+            The environment bond dimension. The default is 0 (go to default).
+
+        Returns
+        -------
+        norm: number
+            The estimated norm.
+
+        """
         return dotPEPS(self, self, chi=chi)
     
     
     def normalize(self, chi=0):
+        """
+        Normalize the PEPS.
+
+        Parameters
+        ----------
+        chi : int, optional
+            The environment bond dimension. The default is 0 (go to default).
+
+        """
         norm = np.sqrt(self.norm(chi=chi))**(1/(self.length[0]*self.length[1]))
         for i in range(self.length[0]):
             for j in range(self.length[1]):
@@ -128,6 +200,27 @@ class peps:
 
     def applyGate(self, gate, sites, mindim=1, maxdim=0, cutoff=10**-12,
                   normalize=False):
+        """
+        Apply a two-site gate to the PEPS.
+
+        Parameters
+        ----------
+        gate : np.ndarray
+            Tensor for two-site gate.
+        sites : List
+            The sites which they act on.
+        mindim : int, optional
+            The minimum number of singular values to keep. The default is 1.
+        maxdim : int, optional
+            The maximum number of singular values to keep. The default is 0,
+            which defines no upper limit.
+        cutoff : float, optional
+            The truncation error of singular values. The default is 0.
+        normalize: bool, optional
+            Approximately rescale the PEPS to avoid exponetial growth. The
+            default is False.
+
+        """
         # Ensure sites are neighbouring and ascending order
         site1 = sites[0]
         site2 = sites[1]
@@ -210,6 +303,26 @@ class peps:
 
 
 def randomPEPS(dim, length, bondDim = 1, dtype=np.complex128):
+    """
+    Create a PEPS with random tensors.
+
+    Parameters
+    ----------
+    dim : int
+        physical dimension
+    length : list / int
+        List of rectangle sizes / square length.
+    bondDim : int, optional
+        The desired bond dimension. The default is 1.
+    dtype : type, optional
+        Data type. The default is np.complex128.
+
+    Returns
+    -------
+    psi : peps
+        Random PEPS.
+
+    """
     # Create an empty PEPS
     psi = peps(dim, length, dtype)
     
@@ -229,6 +342,26 @@ def randomPEPS(dim, length, bondDim = 1, dtype=np.complex128):
 
 
 def meanfieldPEPS(dim, length, A, dtype=np.complex128):
+    """
+    Create a mean field PEPS from tensor A.
+
+    Parameters
+    ----------
+    dim : int
+        physical dimension
+    length : list / int
+        List of rectangle sizes / square length.
+    A : np.ndarray
+        Mean field vector
+    dtype : type, optional
+        Data type. The default is np.complex128.
+
+    Returns
+    -------
+    psi : peps
+        Mean field PEPS.
+
+    """
     # Create an empty PEPS
     psi = peps(dim, length, dtype)
     
@@ -244,6 +377,22 @@ def meanfieldPEPS(dim, length, A, dtype=np.complex128):
 
 
 def productPEPS(s : sitetypes, states):
+    """
+    Create a product state PEPS.
+
+    Parameters
+    ----------
+    s : sitetypes
+        The site types with state names.
+    states : list
+        List of list of states.
+
+    Returns
+    -------
+    psi : peps
+        Product state PEPS.
+
+    """
     # Create an empty PEPS
     psi = peps(s.dim, [len(states), len(states[0])])
     
@@ -256,6 +405,24 @@ def productPEPS(s : sitetypes, states):
 
 
 def dotPEPS(psi1: peps, psi2 : peps, chi = None, cutoff=0):
+    """
+    Approximate the dot product of two PEPS, <psi1 | psi2>.
+
+    Parameters
+    ----------
+    psi1 : peps
+    psi2 : peps
+    chi : int, optional
+        Environment bond dimension. The default is None.
+    cutoff : float, optional
+        he truncation error of singular values. The default is 0.
+
+    Returns
+    -------
+    dot : number
+        The dot product of the two.
+
+    """
     # Determine the auxillary bond dimension
     if chi == None or chi == 0:
         chi = 5*max(psi1.maxBondDim(), psi2.maxBondDim())**2
