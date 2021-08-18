@@ -16,8 +16,8 @@ import copy
 
 # Parameters
 c = 0.5
-s = -1.0
-N = 1000
+s = 0.1
+N = 4
 
 # Load spin half
 sh = spinHalf()

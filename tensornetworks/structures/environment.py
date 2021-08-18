@@ -23,7 +23,7 @@ class environment:
         if chi != 0:
             self.chi = chi
         else:
-            self.chi = 5*psi.maxBondDim()**2
+            self.chi = 10*psi.maxBondDim()**2
         self.nsites = nsites
         
         # Store bMPO blocks
@@ -33,6 +33,14 @@ class environment:
         self.blocks2 = [0] * self.psi.length[1]
         self.center2 = None
         self.build(0, 0)
+        
+        
+    def maxBondDim(self):
+        D = 0
+        for i in range(self.psi.length[self.dir]):
+            if i != self.center:
+                D = max(D, self.blocks[i].maxBondDim())
+        return D
         
     
     def leftBlock(self, idx):
@@ -431,14 +439,8 @@ def expectationOpEnv(env : environment, ops, site, direction=0):
     env.build(site[0], site[1], direction)
     
     # Fetch the left and right blocks
-    if env.center2 == 0:
-        left = ones((1, 1, 1, 1))
-    else:
-        left = env.blocks2[env.center2-1]
-    if env.center2 >= len(env.blocks2)-len(ops):
-        right = ones((1, 1, 1, 1))
-    else:
-        right = env.blocks2[env.center2+len(ops)]
+    left = env.leftMPSBlock(env.center2-1)
+    right = env.rightMPSBlock(env.center2+len(ops))
     
     prod = copy.deepcopy(left)
     for i in range(len(ops)):

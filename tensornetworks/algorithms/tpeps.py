@@ -7,6 +7,173 @@ import numpy as np # Will be the main numerical resource
 import copy # To make copies
 from tensornetworks.tensors import *
 from tensornetworks.structures.environment import environment
+from scipy.sparse.linalg import LinearOperator, cg
+
+
+def tpeps(psi, gate, dt, maxdim, maxiter=1000, chi=0, cutoff=10**-16, tol=10**-8):
+    # Determine chi
+    if chi == 0:
+        chi = 10*maxdim**2
+    
+    # Create the environment and evolution gate
+    env = environment(psi, chi)
+    gate = exp(gate, [1, 3], dt)
+    
+    # Evolve until convergence
+    converge = False
+    k = 0
+    check = 0 
+    Zs = []
+    while not converge:
+        Z = 0
+        
+        # Loop through horizontal, and then vertical bonds
+        for d in range(2):
+            # Loop through rows / columns
+            for i in range(psi.length[d]):
+                # Loop through the even / odd sites
+                evens = []
+                odds = []
+                for j in range(psi.length[1-d]-1):
+                    if j % 2 == 0:
+                        evens.append(j)
+                    else:
+                        odds.append(j)
+                
+                for d2 in range(2):
+                    # Determine the sites
+                    sites = evens if d2 == 0 else odds
+                    
+                    # Loop through all sites
+                    for site in sites:
+                        site1 = i if d == 0 else site
+                        site2 = site if d == 0 else i
+                        
+                        # Optimize
+                        norm = optimize(env, site1, site2, d, d2, gate, maxdim,
+                                        cutoff=cutoff)
+                        Z += np.log(np.real(norm)) / (2*dt)
+        
+        # Increment simulations and check convergence
+        k += 1
+        Zs.append(Z)
+        if k >= 2:
+            if np.abs(Zs[-1] - Zs[-2]) < tol:
+                check += 1
+            else:
+                check = 0
+        if check >= 3 or k >= maxiter:
+            converge = True
+        
+        # Output information
+        print("dt="+str(dt)+", sim="+str(k)+", energy="+str(Z) + \
+               ", maxbondim="+str(psi.maxBondDim())+", maxchi="+str(env.maxBondDim()))
+    return psi
+                    
+
+
+
+def optimize(env, i, j, direction, direction2, gate, maxdim, cutoff=10**-16,
+             tol=10**-10):
+    # Detmine which sites to fetch
+    site1 = [i, j]
+    site2 = [i+direction, j+1-direction]
+    
+    # Fetch the current tensors
+    A1 = copy.deepcopy(env.psi.tensors[site1[0]][site1[1]])
+    A2 = copy.deepcopy(env.psi.tensors[site2[0]][site2[1]])
+    shape1 = shape(A1)
+    shape2 = shape(A2)
+    
+    # Contract tensors with each other and gate
+    if direction == 0:
+        prod = contract(A1, A2, 3, 0)
+    else:
+        prod = contract(A1, A2, 2, 1)
+    prod = contract(prod, gate, 3, 1)
+    prod = trace(prod, 6, 9)
+    prod = permute(prod, 6, 3)
+    
+    # Split the gate using SVD
+    prod, cmb1 = combineIdxs(prod, [0, 1, 2, 3])
+    prod, cmb2 = combineIdxs(prod, [0, 1, 2, 3])
+    U, S, V = svd(prod, maxdim=maxdim, cutoff=cutoff)
+    
+    # Move singular values left and reshape into the correct form
+    U = contract(U, S, 1, 0)
+    if direction == 0:
+        A1 = permute(U, 1, 0)
+        A1 = reshape(A1, (shape(S)[0], shape1[0], shape1[1], shape1[2], shape1[4]))
+        A1 = permute(A1, 0, 3)
+        A2 = reshape(V, (shape(S)[1], shape2[1], shape2[2], shape2[3], shape2[4]))
+    else:
+        A1 = permute(U, 1, 0)
+        A1 = reshape(A1, (shape(S)[0], shape1[0], shape1[1], shape1[3], shape1[4]))
+        A1 = permute(A1, 0, 2)
+        A2 = reshape(V, (shape(S)[1], shape2[0], shape2[2], shape2[3], shape2[4]))
+        A2 = permute(A2, 0, 1)  
+    
+    
+    # Fetch their new shapes
+    shape1 = shape(A1)
+    shape2 = shape(A2)
+    
+    # Flatten the tensors
+    A1 = A1.flatten()
+    A2 = A2.flatten()
+    
+
+    # Move the environment to the correct site, calculate overlap and norm
+    env.build(site1[0], site1[1], direction)
+    overlaps = [calculateOverlap(env, reshape(A1, shape1), reshape(A2, shape2),
+                                 gate)]
+    norms = [calculateNorm(env, reshape(A1, shape1), reshape(A2, shape2))]
+    cost = [overlaps[0]-2*norms[0]]
+    
+    k = 0
+    converge = False
+    while not converge:
+        # Optimize first site
+        def mv1(x):
+            A = partialNorm(env, reshape(x, shape1), reshape(A2, shape2), 0).flatten()
+            return 0.5*(A+dag(A)).flatten()
+        L1 = LinearOperator((np.size(A1), np.size(A1)), matvec=mv1)
+        b1 = partialOverlap(env, reshape(A1, shape1), reshape(A2, shape2),
+                            gate, 0).flatten()
+        b1 = 0.5*(b1+dag(b1))
+        A1 = cg(L1, b1, A1)[0]
+        
+        # Optimize the second
+        def mv2(y):
+            A = partialNorm(env, reshape(A1, shape1), reshape(y, shape2), 1).flatten()
+            return 0.5*(A+dag(A)).flatten()
+        L2 = LinearOperator((np.size(A2), np.size(A2)), matvec=mv2)
+        b2 = partialOverlap(env, reshape(A1, shape1), reshape(A2, shape2),
+                            gate, 1).flatten()
+        b2 = 0.5*(b2+dag(b2))
+        A2 = cg(L2, b2, A2)[0]
+        
+        # Calculate the overlap and norms
+        overlaps.append(calculateOverlap(env, reshape(A1, shape1),
+                                         reshape(A2, shape2), gate))
+        norms.append(calculateNorm(env, reshape(A1, shape1),
+                                   reshape(A2, shape2)))
+        cost.append(overlaps[-1]-2*norms[-1])
+        
+        # Check to see if converged
+        k += 1
+        converge = abs(cost[-1] - cost[-2]) < tol
+        converge = converge or k >= 100
+    
+    # Update the tensors
+    env.psi.tensors[site1[0]][site1[1]] = reshape(A1, shape1)*norms[-1]**(-0.5)
+    env.psi.tensors[site2[0]][site2[1]] = reshape(A2, shape2)
+    
+    # Move environment
+    env.build(site2[0], site2[1], direction)
+    return norms[-1]        
+    
+
 
 def calculateOverlap(env, A1, A2, gate):
     # Fetch the blocks
@@ -43,7 +210,7 @@ def calculateOverlap(env, A1, A2, gate):
         prod = trace(prod, 4, 6)
         prod = contract(prod, Mleft2, 0, 0)
         prod = contract(prod, dag(A2), 0, 0)
-        prod = trace(prod, 3, 6)
+        prod = trace(prod, 4, 7)
         prod = trace(prod, 0, 8)
         prod = contract(prod, B2, 1, 0)
         prod = trace(prod, 2, 6)
@@ -128,7 +295,7 @@ def calculateNorm(env, A1, A2):
     return prod.item()
     
     
-def partialNorm(env, A1, A2):
+def partialNorm(env, A1, A2, site=0):
     # Fetch the blocks
     left = env.leftBlock(env.center-1)
     right = env.rightBlock(env.center+1)
@@ -141,12 +308,190 @@ def partialNorm(env, A1, A2):
     Mright1 = right.tensors[env.center2]
     Mright2 = right.tensors[env.center2+1]
     
-    # Calculate partial norm
+    # Expand the relevent blocks
+    if site == 1:
+        # Expand the left block
+        if env.dir == 0:
+            leftMPS = contract(leftMPS, Mleft1, 0, 0)
+            leftMPS = contract(leftMPS, dag(A1), 0, 0)
+            leftMPS = trace(leftMPS, 2, 5)
+            leftMPS = contract(leftMPS, A1, 0, 0)
+            leftMPS = trace(leftMPS, 1, 6)
+            leftMPS = trace(leftMPS, 4, 7)
+            leftMPS = contract(leftMPS, Mright1,  0, 0)
+            leftMPS = trace(leftMPS, 1, 5)
+            leftMPS = trace(leftMPS, 2, 4)
+        else:
+            leftMPS = contract(leftMPS, Mleft1, 0, 0)
+            leftMPS = contract(leftMPS, dag(A1), 0, 1)
+            leftMPS = trace(leftMPS, 2, 5)
+            leftMPS = contract(leftMPS, A1, 0, 1)
+            leftMPS = trace(leftMPS, 1, 6)
+            leftMPS = trace(leftMPS, 4, 7)
+            leftMPS = contract(leftMPS, Mright1, 0, 0)
+            leftMPS = trace(leftMPS, 2, 5)
+            leftMPS = trace(leftMPS, 3, 4)
+        Mleft = Mleft2
+        Mright = Mright2
+        A = A2
+    else:
+        # Expand the right block
+        if env.dir == 0:
+            rightMPS = contract(Mright2, rightMPS, 3, 3)
+            rightMPS = contract(A2, rightMPS, 3, 5)
+            rightMPS = trace(rightMPS, 2, 6)
+            rightMPS = contract(dag(A2), rightMPS, 3, 6)
+            rightMPS = trace(rightMPS, 2, 8)
+            rightMPS = trace(rightMPS, 2, 5)
+            rightMPS = contract(Mleft2, rightMPS, 3, 5)
+            rightMPS = trace(rightMPS, 2, 6)
+            rightMPS = trace(rightMPS, 1, 3)
+        else:
+            rightMPS = contract(Mright2, rightMPS, 3, 3)
+            rightMPS = contract(A2, rightMPS, 2, 5)
+            rightMPS = trace(rightMPS, 2, 6)
+            rightMPS = contract(dag(A2), rightMPS, 2, 6)
+            rightMPS = trace(rightMPS, 2, 8)
+            rightMPS = trace(rightMPS, 2, 5)
+            rightMPS = contract(Mleft2, rightMPS, 3, 5)
+            rightMPS = trace(rightMPS, 2, 5)
+            rightMPS = trace(rightMPS, 1, 2)
+        Mleft = Mleft1
+        Mright = Mright1
+        A = A1
+    
+    # Contract the left block with middle sites and then right block
+    if env.dir == 0:
+        prod = contract(leftMPS, Mleft, 0, 0)
+        prod = contract(prod, A, 1, 0)
+        prod = trace(prod, 3, 5)
+        prod = contract(prod, Mright, 1, 0)
+        prod = trace(prod, 3, 7)
+        prod = contract(prod, rightMPS, 2, 0)
+        prod = trace(prod, 5, 8)
+        prod = trace(prod, 2, 6)
+    else:
+        prod = contract(leftMPS, Mleft, 0, 0)
+        prod = contract(prod, A, 1, 1)
+        prod = trace(prod, 3, 5)
+        prod = contract(prod, Mright, 1, 0)
+        prod = trace(prod, 4, 7)
+        prod = contract(prod, rightMPS, 2, 0)
+        prod = trace(prod, 5, 8)
+        prod = trace(prod, 2, 6)
+    
+    # Reshape into the correct form
+    if env.dir == 0:
+        prod = permute(prod, 2)
+    else:
+        prod = permute(prod, 0, 1)
+        prod = permute(prod, 3, 4)
+        prod = permute(prod, 2)
+    
+    return prod
 
-def partialOverlap(env, A1, A2):
-    # Calculate the partial overlap
+def partialOverlap(env, A1, A2, gate, site=0):
+    # Fetch the blocks
+    left = env.leftBlock(env.center-1)
+    right = env.rightBlock(env.center+1)
+    leftMPS = env.leftMPSBlock(env.center2-1)
+    rightMPS = env.rightMPSBlock(env.center2+2)
     
+    # Get the bMPO tensors
+    Mleft1 = left.tensors[env.center2]
+    Mleft2 = left.tensors[env.center2+1]
+    Mright1 = right.tensors[env.center2]
+    Mright2 = right.tensors[env.center2+1]
     
+    # Do the whole contractions for each of the four cases
+    if env.dir == 0 and site == 1:
+        prod = contract(leftMPS, Mleft1, 0, 0)
+        prod = contract(prod, dag(A1), 0, 0)
+        prod = trace(prod, 2, 5)
+        prod = contract(prod, gate, 6, 0)
+        prod = contract(prod, env.psi.tensors[env.center][env.center2], 0, 0)
+        prod = trace(prod, 1, 8)
+        prod = trace(prod, 4, 9)
+        prod = contract(prod, Mright1, 0, 0)
+        prod = trace(prod, 1, 7)
+        prod = trace(prod, 4, 6)
+        prod = contract(prod, Mright2, 5, 0)
+        prod = contract(prod, env.psi.tensors[env.center][env.center2+1], 4, 0)
+        prod = trace(prod, 5, 8)
+        prod = trace(prod, 3, 8)
+        prod = contract(prod, Mleft2, 0, 0)
+        prod = trace(prod, 4, 7)
+        prod = contract(prod, rightMPS, 6, 0)
+        prod = trace(prod, 3, 8)
+        prod = trace(prod, 3, 6)
+        prod = permute(prod, 2, 3)
+        prod = permute(prod, 1)
+    elif env.dir == 0 and site == 0:
+        prod = contract(Mright2, rightMPS, 3, 3)
+        prod = contract(env.psi.tensors[env.center][env.center2+1], prod, 3, 5)
+        prod = trace(prod, 2, 6)
+        prod = contract(gate, prod, 3, 2)
+        prod = contract(dag(A2), prod, 3, 8)
+        prod = trace(prod, 2, 10)
+        prod = trace(prod, 2, 5)
+        prod = contract(Mleft2, prod, 3, 7)
+        prod = trace(prod, 2, 8)
+        prod = trace(prod, 1, 3)
+        prod = contract(Mright1, prod, 3, 5)
+        prod = contract(env.psi.tensors[env.center][env.center2], prod, 3, 7)
+        prod = trace(prod, 2, 6)
+        prod = trace(prod, 2, 8)
+        prod = contract(Mleft1, prod, 3, 4)
+        prod = trace(prod, 2, 4)
+        prod = contract(leftMPS, prod, 3, 3)
+        prod = trace(prod, 0, 3)
+        prod = trace(prod, 1, 3)
+    elif env.dir == 1 and site == 1:
+        prod = contract(leftMPS, Mleft1, 0, 0)
+        prod = contract(prod, dag(A1), 0, 1)
+        prod = trace(prod, 2, 5)
+        prod = contract(prod, gate, 6, 0)
+        prod = contract(prod, env.psi.tensors[env.center2][env.center], 0, 1)
+        prod = trace(prod, 1, 8)
+        prod = trace(prod, 4, 9)
+        prod = contract(prod, Mright1, 0, 0)
+        prod = trace(prod, 2, 7)
+        prod = trace(prod, 5, 6)
+        prod = contract(prod, Mright2, 5, 0)
+        prod = contract(prod, env.psi.tensors[env.center2+1][env.center], 4, 1)
+        prod = trace(prod, 5, 9)
+        prod = trace(prod, 3, 8)
+        prod = contract(prod, Mleft2, 0, 0)
+        prod = trace(prod, 4, 7)
+        prod = contract(prod, rightMPS, 6, 0)
+        prod = trace(prod, 3, 8)
+        prod = trace(prod, 3, 6)
+        prod = permute(prod, 1)
+        prod = permute(prod, 2, 0)
+        prod = permute(prod, 3, 2)
+    elif env.dir == 1 and site == 0:
+        prod = contract(Mright2, rightMPS, 3, 3)
+        prod = contract(env.psi.tensors[env.center2+1][env.center], prod, 2, 5)
+        prod = trace(prod, 2, 6)
+        prod = contract(gate, prod, 3, 2)
+        prod = contract(dag(A2), prod, 2, 8)
+        prod = trace(prod, 2, 10)
+        prod = trace(prod, 2, 5)
+        prod = contract(Mleft2, prod, 3, 7)
+        prod = trace(prod, 2, 7)
+        prod = trace(prod, 1, 2)
+        prod = contract(Mright1, prod, 3, 5)
+        prod = contract(env.psi.tensors[env.center2][env.center], prod, 2, 7)
+        prod = trace(prod, 2, 6)
+        prod = trace(prod, 2, 8)
+        prod = contract(Mleft1, prod, 3, 4)
+        prod = trace(prod, 2, 3)
+        prod = contract(leftMPS, prod, 3, 3)
+        prod = trace(prod, 0, 3)
+        prod = trace(prod, 1, 3)
+        prod = permute(prod, 0, 1)
+        prod = permute(prod, 2, 3)
+    return prod
     
     
         

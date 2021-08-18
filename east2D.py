@@ -8,9 +8,9 @@ import copy
 
 # Parameters
 c = 0.5
-s = 1.0
+s = -1.0
 N = 4
-maxD = 1
+maxD = 2
 
 sh = spinHalf()
 states = []
@@ -64,11 +64,11 @@ for i in range(N):
         
 lastEnergy = 0
 energy = 1
-for dt in [0.1, 0.01]:
+for dt in [1.0, 0.1]:
     lastEnergy = 0
     gates = exp(gate, [1, 3], dt)
     while np.abs((energy - lastEnergy) / energy) > 10**-4:
-        for k in range(1000):
+        for k in range(100):
             for site in sitesList:
                 psi.applyGate(gates, site, mindim=maxD, maxdim=maxD, normalize=True)
             #print("dt="+str(dt)+" sim="+str(k+1))

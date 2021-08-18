@@ -15,7 +15,7 @@ from tensornetworks.tensors import *
 from tensornetworks.structures.mpo import mpo
 from tensornetworks.structures.projbMPO import projbMPO
 
-def vbMPO(O : mpo, chi, tol=10**-10, cutoff=10**-16):
+def vbMPO(O : mpo, chi, tol=10**-8, cutoff=10**-20, maxiter=100):
     # Start by copying the bMPO and using SVD to truncate
     P = copy.deepcopy(O)
     P.orthogonalize(P.length-1)
@@ -32,6 +32,7 @@ def vbMPO(O : mpo, chi, tol=10**-10, cutoff=10**-16):
     # Loop until the change in difference converges
     converged = False
     rev = 0
+    iterations = 0
     while not converged:
         # Loop through each site
         for i in range(O.length):
@@ -57,7 +58,10 @@ def vbMPO(O : mpo, chi, tol=10**-10, cutoff=10**-16):
         diff = 2*projPP.calculate() - projOPdiff - np.conj(projOPdiff)
         
         # Check to see if converged
+        iterations += 1
         if np.abs(diff - oldDiff) < tol:
+            converged = True
+        if maxiter != 0 and iterations >= maxiter:
             converged = True
     
     return P
