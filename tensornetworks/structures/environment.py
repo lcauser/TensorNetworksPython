@@ -17,14 +17,26 @@ from tensornetworks.algorithms.vbMPO import vbMPO
 
 class environment:
     
-    def __init__(self, psi : peps, chi=0, nsites=2):
+    def __init__(self, psi : peps, chi=0):
+        """
+        A class to build and manipulate environments for two-layer PEPS
+        contractions.
+
+        Parameters
+        ----------
+        psi : peps
+            State to build the environment from.
+        chi : int, optional
+            The environment bond dimension. Will default to 5*D^{2} for
+            D bond dim in psi.
+
+        """
         # Store the information
         self.psi = psi
         if chi != 0:
             self.chi = chi
         else:
-            self.chi = 10*psi.maxBondDim()**2
-        self.nsites = nsites
+            self.chi = 5*psi.maxBondDim()**2
         
         # Store bMPO blocks
         self.dir = 0 # 0 = vertical, 1 = horizontal
@@ -36,6 +48,17 @@ class environment:
         
         
     def maxBondDim(self):
+        """
+        Determine the maximum bond dimension with the environment.
+
+        Returns
+        -------
+        chi : int
+            Maximum bond dimension.
+
+        """
+        
+        # Loop through each bMPO block and determine the maximum bond dim.
         D = 0
         for i in range(self.psi.length[self.dir]):
             if i != self.center:
@@ -43,6 +66,7 @@ class environment:
         return D
         
     
+    # YOU ONLY NEED ONE FUNCTION, NOT LEFT AND RIGHT.
     def leftBlock(self, idx):
         if idx < 0:
             return bMPO(self.psi.length[1])
@@ -69,6 +93,15 @@ class environment:
     
     
     def buildUp(self, idx):
+        """
+        Build a bMPO block upwards.
+
+        Parameters
+        ----------
+        idx : int
+            Index to build to.
+
+        """
         # Retrieve the previous down block
         if idx == self.psi.length[0] - 1:
             prev = bMPO(self.psi.length[1])
@@ -103,6 +136,15 @@ class environment:
         
             
     def buildDown(self, idx):
+        """
+        Build a bMPO block downwards.
+
+        Parameters
+        ----------
+        idx : int
+            Index to build to.
+
+        """
         # Retrieve the previous down block
         if idx == 0:
             prev = bMPO(self.psi.length[1])
@@ -137,6 +179,15 @@ class environment:
     
     
     def buildRight(self, idx):
+        """
+        Build a bMPO block rightwards.
+
+        Parameters
+        ----------
+        idx : int
+            Index to build to.
+
+        """
         # Retrieve the previous down block
         if idx == 0:
             prev = bMPO(self.psi.length[0])
@@ -172,6 +223,15 @@ class environment:
     
     
     def buildLeft(self, idx):
+        """
+        Build a bMPO block leftwards.
+
+        Parameters
+        ----------
+        idx : int
+            Index to build to.
+
+        """
         # Retrieve the previous down block
         if idx == self.psi.length[1] - 1:
             prev = bMPO(self.psi.length[0])
@@ -207,6 +267,15 @@ class environment:
     
     
     def buildMPSRight(self, idx):
+        """
+        Build the MPS sandwich contraction to the right.
+
+        Parameters
+        ----------
+        idx : int
+            Index to build to.
+
+        """
         # Fetch the left blocks
         if idx == 0:
             left = ones((1, 1, 1, 1))
@@ -253,6 +322,15 @@ class environment:
     
     
     def buildMPSLeft(self, idx):
+        """
+        Build the MPS sandwich contraction to the left.
+
+        Parameters
+        ----------
+        idx : int
+            Index to build to.
+
+        """
         # Fetch the right blocks
         if idx == len(self.blocks2)-1:
             right = ones((1, 1, 1, 1))
@@ -299,6 +377,19 @@ class environment:
             
     
     def build(self, idx1, idx2, direction=0):
+        """
+        Construct the environment.
+
+        Parameters
+        ----------
+        idx1 : int
+            y-coordinate.
+        idx2 : int
+            x-coordinate.
+        direction : bool, optional
+            0 = rows, 1 = columns. The default is 0.
+
+        """
         # Check if direction is correct
         if direction != self.dir:
             self.dir = direction
@@ -365,8 +456,7 @@ class environment:
                 for i in range(self.center2 - idx):
                     self.buildMPSLeft(self.center2 - i)
         self.center2 = idx
-            
-            
+              
         return None
     
     
@@ -429,6 +519,7 @@ class environment:
         return prod.item()
                 
 
+# These functions give bad results; fix them.
 def expectationOpEnv(env : environment, ops, site, direction=0):
     if not isinstance(ops, list):
         ops = [ops]

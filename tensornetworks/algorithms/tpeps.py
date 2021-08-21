@@ -17,7 +17,9 @@ def tpeps(psi, gate, dt, maxdim, maxiter=1000, chi=0, cutoff=10**-16, tol=10**-8
     
     # Create the environment and evolution gate
     env = environment(psi, chi)
-    gate = exp(gate, [1, 3], dt)
+    gate1 = exp(gate, [1, 3], dt)
+    gate2 = exp(gate, [1, 3], dt/2)
+    gate3 = exp(gate, [1, 3], dt/4)
     
     # Evolve until convergence
     converge = False
@@ -26,9 +28,11 @@ def tpeps(psi, gate, dt, maxdim, maxiter=1000, chi=0, cutoff=10**-16, tol=10**-8
     Zs = []
     while not converge:
         Z = 0
+        maxChi = 0
+        error = 0
         
         # Loop through horizontal, and then vertical bonds
-        for d in range(2):
+        for d in [0, 1, 0]:
             # Loop through rows / columns
             for i in range(psi.length[d]):
                 # Loop through the even / odd sites
@@ -40,9 +44,19 @@ def tpeps(psi, gate, dt, maxdim, maxiter=1000, chi=0, cutoff=10**-16, tol=10**-8
                     else:
                         odds.append(j)
                 
-                for d2 in range(2):
+                for d2 in [0, 1, 0]:
                     # Determine the sites
-                    sites = evens if d2 == 0 else odds
+                    sites = evens if d2 == 0 else np.flip(odds)
+                    
+                    # Determine the gates
+                    if d == 0 and d2 == 0:
+                        gates = gate3
+                    elif d == 0 and d2 == 1:
+                        gates = gate2
+                    elif d == 1 and d2 == 0:
+                        gates = gate2
+                    elif d == 1 and d2 == 1:
+                        gates = gate1
                     
                     # Loop through all sites
                     for site in sites:
@@ -50,9 +64,11 @@ def tpeps(psi, gate, dt, maxdim, maxiter=1000, chi=0, cutoff=10**-16, tol=10**-8
                         site2 = site if d == 0 else i
                         
                         # Optimize
-                        norm = optimize(env, site1, site2, d, d2, gate, maxdim,
-                                        cutoff=cutoff)
+                        norm, err = optimize(env, site1, site2, d, d2, gates,
+                                             maxdim, cutoff=cutoff)
                         Z += np.log(np.real(norm)) / (2*dt)
+                        maxChi = max(maxChi, env.maxBondDim())
+                        error = max(error, err)
         
         # Increment simulations and check convergence
         k += 1
@@ -62,28 +78,44 @@ def tpeps(psi, gate, dt, maxdim, maxiter=1000, chi=0, cutoff=10**-16, tol=10**-8
                 check += 1
             else:
                 check = 0
-        if check >= 3 or k >= maxiter:
+        if check >= 1 or k >= maxiter:
             converge = True
+        
+        # Rescale the peps
+        psi.rescale()
         
         # Output information
         print("dt="+str(dt)+", sim="+str(k)+", energy="+str(Z) + \
-               ", maxbondim="+str(psi.maxBondDim())+", maxchi="+str(env.maxBondDim()))
-    return psi
+               ", maxbondim="+str(psi.maxBondDim())+", maxchi="+str(maxChi)+\
+                   ", cost="+str(error))
+    return psi, Zs[-1]
                     
 
 
 
 def optimize(env, i, j, direction, direction2, gate, maxdim, cutoff=10**-16,
-             tol=10**-10):
+             tol=10**-5, maxiter=1000):
     # Detmine which sites to fetch
     site1 = [i, j]
     site2 = [i+direction, j+1-direction]
+    
+    # Build the environment
+    if direction2 == 1:
+        env.build(site2[0], site2[1], direction)
+    else:
+        env.build(site1[0], site1[1], direction)
     
     # Fetch the current tensors
     A1 = copy.deepcopy(env.psi.tensors[site1[0]][site1[1]])
     A2 = copy.deepcopy(env.psi.tensors[site2[0]][site2[1]])
     shape1 = shape(A1)
     shape2 = shape(A2)
+    
+    # Calculate the norm of the updated state
+    gate2 = contract(dag(gate), gate, 0, 0)
+    gate2 = trace(gate2, 1, 4)
+    gate2 = permute(gate2, 1, 2)
+    normGate = calculateOverlap(env, A1, A2, gate2, direction2)
     
     # Contract tensors with each other and gate
     if direction == 0:
@@ -97,7 +129,7 @@ def optimize(env, i, j, direction, direction2, gate, maxdim, cutoff=10**-16,
     # Split the gate using SVD
     prod, cmb1 = combineIdxs(prod, [0, 1, 2, 3])
     prod, cmb2 = combineIdxs(prod, [0, 1, 2, 3])
-    U, S, V = svd(prod, maxdim=maxdim, cutoff=cutoff)
+    U, S, V = svd(prod, maxdim=maxdim)
     
     # Move singular values left and reshape into the correct form
     U = contract(U, S, 1, 0)
@@ -122,79 +154,116 @@ def optimize(env, i, j, direction, direction2, gate, maxdim, cutoff=10**-16,
     A1 = A1.flatten()
     A2 = A2.flatten()
     
+    
 
-    # Move the environment to the correct site, calculate overlap and norm
-    env.build(site1[0], site1[1], direction)
-    overlaps = [calculateOverlap(env, reshape(A1, shape1), reshape(A2, shape2),
-                                 gate)]
-    norms = [calculateNorm(env, reshape(A1, shape1), reshape(A2, shape2))]
-    cost = [overlaps[0]-2*norms[0]]
+    # Calculate the initial cost
+    overlap = calculateOverlap(env, reshape(A1, shape1), reshape(A2, shape2),
+                                 gate, direction2)
+    norm = calculateNorm(env, reshape(A1, shape1), reshape(A2, shape2),
+                         direction2)
+    cost = [normGate + norm - overlap - np.conj(overlap)]
     
     k = 0
     converge = False
     while not converge:
         # Optimize first site
         def mv1(x):
-            A = partialNorm(env, reshape(x, shape1), reshape(A2, shape2), 0).flatten()
+            A = partialNorm(env, reshape(x, shape1), reshape(A2, shape2),
+                            direction2, 0).flatten()
             return 0.5*(A+dag(A)).flatten()
-        L1 = LinearOperator((np.size(A1), np.size(A1)), matvec=mv1)
+        L1 = LinearOperator((np.size(A1), np.size(A1)), matvec=mv1, rmatvec=mv1)
         b1 = partialOverlap(env, reshape(A1, shape1), reshape(A2, shape2),
-                            gate, 0).flatten()
+                            gate, direction2, 0).flatten()
         b1 = 0.5*(b1+dag(b1))
-        A1 = cg(L1, b1, A1)[0]
+        #A1, info = cg(L1, b1, A1, maxiter=100, tol=10**-10)
+        A1 = scipy.sparse.linalg.lsmr(L1, b1, maxiter=100, atol=10**-10,
+                                      btol=10**-10, x0=A1)[0]
         
         # Optimize the second
         def mv2(y):
-            A = partialNorm(env, reshape(A1, shape1), reshape(y, shape2), 1).flatten()
+            A = partialNorm(env, reshape(A1, shape1), reshape(y, shape2),
+                            direction2, 1).flatten()
             return 0.5*(A+dag(A)).flatten()
-        L2 = LinearOperator((np.size(A2), np.size(A2)), matvec=mv2)
+        L2 = LinearOperator((np.size(A2), np.size(A2)), matvec=mv2, rmatvec=mv2)
         b2 = partialOverlap(env, reshape(A1, shape1), reshape(A2, shape2),
-                            gate, 1).flatten()
+                            gate, direction2, 1).flatten()
         b2 = 0.5*(b2+dag(b2))
-        A2 = cg(L2, b2, A2)[0]
+        #A2, info = cg(L2, b2, A2, maxiter=100, tol=10**-10)
+        A2 = scipy.sparse.linalg.lsmr(L2, b2, maxiter=100, atol=10**-10,
+                                      btol=10**-10, x0=A2)[0]
         
         # Calculate the overlap and norms
-        overlaps.append(calculateOverlap(env, reshape(A1, shape1),
-                                         reshape(A2, shape2), gate))
-        norms.append(calculateNorm(env, reshape(A1, shape1),
-                                   reshape(A2, shape2)))
-        cost.append(overlaps[-1]-2*norms[-1])
+        overlap = calculateOverlap(env, reshape(A1, shape1), reshape(A2, shape2),
+                                 gate, direction2)
+        norm = calculateNorm(env, reshape(A1, shape1), reshape(A2, shape2),
+                             direction2)
+        cost.append(normGate + norm - overlap - np.conj(overlap))
         
         # Check to see if converged
         k += 1
-        converge = abs(cost[-1] - cost[-2]) < tol
-        converge = converge or k >= 100
+        if np.real(cost[-1]) > 10**-12:
+            converge = np.real((cost[-1] - cost[-2]) / (cost[-1])) <= tol
+        else:
+            converge = True
+        converge = converge or k >= maxiter
+        if k == maxiter:
+            print("Max iterations reached")
     
     # Update the tensors
-    env.psi.tensors[site1[0]][site1[1]] = reshape(A1, shape1)*norms[-1]**(-0.5)
-    env.psi.tensors[site2[0]][site2[1]] = reshape(A2, shape2)
+    if np.max(np.abs(A1)) > 10**-10 and np.max(np.abs(A2)) > 10**-10:
+        env.psi.tensors[site1[0]][site1[1]] = reshape(A1, shape1)*norm**(-0.5)
+        env.psi.tensors[site2[0]][site2[1]] = reshape(A2, shape2)
+    else:
+        print("Optimization failed: using old tensors.")
+        print(site1, site1, direction)
+        norm = normGate
     
-    # Move environment
-    env.build(site2[0], site2[1], direction)
-    return norms[-1]        
+    # Build the environment
+    if direction2 == 1:
+        env.build(site1[0], site1[1], direction)
+    else:
+        env.build(site2[0], site2[1], direction)
+    return norm, cost[-1] 
     
 
 
-def calculateOverlap(env, A1, A2, gate):
+def calculateOverlap(env, A1, A2, gate, direction2=0):
+    """
+    Calculate the overlap which updated tensors.
+
+    Parameters
+    ----------
+    env : environment
+    A1 : np.ndarray
+        First tensor in optimization.
+    A2 : np.ndarray
+        Second tensor in optimization.
+
+    Returns
+    -------
+    prod : number
+        The norm.
+
+    """
     # Fetch the blocks
     left = env.leftBlock(env.center-1)
     right = env.rightBlock(env.center+1)
-    leftMPS = env.leftMPSBlock(env.center2-1)
-    rightMPS = env.rightMPSBlock(env.center2+2)
+    leftMPS = env.leftMPSBlock(env.center2-1-direction2)
+    rightMPS = env.rightMPSBlock(env.center2+2-direction2)
     
     # Get the bMPO tensors
-    Mleft1 = left.tensors[env.center2]
-    Mleft2 = left.tensors[env.center2+1]
-    Mright1 = right.tensors[env.center2]
-    Mright2 = right.tensors[env.center2+1]
+    Mleft1 = left.tensors[env.center2-direction2]
+    Mleft2 = left.tensors[env.center2+1-direction2]
+    Mright1 = right.tensors[env.center2-direction2]
+    Mright2 = right.tensors[env.center2+1-direction2]
     
     # Get the site tensors
     if env.dir == 0:
-        B1 = env.psi.tensors[env.center][env.center2]
-        B2 = env.psi.tensors[env.center][env.center2+1]
+        B1 = env.psi.tensors[env.center][env.center2-direction2]
+        B2 = env.psi.tensors[env.center][env.center2+1-direction2]
     else:
-        B1 = env.psi.tensors[env.center2][env.center]
-        B2 = env.psi.tensors[env.center2+1][env.center]
+        B1 = env.psi.tensors[env.center2-direction2][env.center]
+        B2 = env.psi.tensors[env.center2+1-direction2][env.center]
     
     # Do the contractions
     if env.dir == 0:
@@ -248,12 +317,32 @@ def calculateOverlap(env, A1, A2, gate):
     return prod.item()
 
 
-def calculateNorm(env, A1, A2):
+def calculateNorm(env, A1, A2, direction2=0):
+    """
+    Calculate the norm which updated tensors.
+
+    Parameters
+    ----------
+    env : environment
+    A1 : np.ndarray
+        First tensor in optimization.
+    A2 : np.ndarray
+        Second tensor in optimization.
+    gate : np.ndarray
+        Two-site gate.
+
+    Returns
+    -------
+    prod : number
+        The overlap.
+
+    """
+    
     # Fetch the blocks
     left = env.leftBlock(env.center-1)
     right = env.rightBlock(env.center+1)
-    leftMPS = env.leftMPSBlock(env.center2-1)
-    rightMPS = env.rightMPSBlock(env.center2+2)
+    leftMPS = env.leftMPSBlock(env.center2-1-direction2)
+    rightMPS = env.rightMPSBlock(env.center2+2-direction2)
     
     As = [A1, A2]
     prod = copy.deepcopy(leftMPS)
@@ -261,8 +350,8 @@ def calculateNorm(env, A1, A2):
     for i in range(2):
         # Fetch tensors
         A = As[i]
-        Mleft = left.tensors[env.center2+i]
-        Mright = right.tensors[env.center2+i]
+        Mleft = left.tensors[env.center2+i-direction2]
+        Mright = right.tensors[env.center2+i-direction2]
         
         # Contract with middle
         if env.dir == 0:
@@ -295,18 +384,39 @@ def calculateNorm(env, A1, A2):
     return prod.item()
     
     
-def partialNorm(env, A1, A2, site=0):
+def partialNorm(env, A1, A2, direction2=0, site=0):
+    """
+    Calculate the partial norm which updated tensors.
+
+    Parameters
+    ----------
+    env : environment
+    A1 : np.ndarray
+        First tensor in optimization.
+    A2 : np.ndarray
+        Second tensor in optimization.
+    site : bool, optional
+        The site which is being optimized, 0 = first, 1 = second.
+        The default is 0.
+
+    Returns
+    -------
+    prod : np.ndarray
+        The norm matrix.
+
+    """
+    
     # Fetch the blocks
     left = env.leftBlock(env.center-1)
     right = env.rightBlock(env.center+1)
-    leftMPS = env.leftMPSBlock(env.center2-1)
-    rightMPS = env.rightMPSBlock(env.center2+2)
+    leftMPS = env.leftMPSBlock(env.center2-1-direction2)
+    rightMPS = env.rightMPSBlock(env.center2+2-direction2)
     
     # Get the bMPO tensors
-    Mleft1 = left.tensors[env.center2]
-    Mleft2 = left.tensors[env.center2+1]
-    Mright1 = right.tensors[env.center2]
-    Mright2 = right.tensors[env.center2+1]
+    Mleft1 = left.tensors[env.center2-direction2]
+    Mleft2 = left.tensors[env.center2+1-direction2]
+    Mright1 = right.tensors[env.center2-direction2]
+    Mright2 = right.tensors[env.center2+1-direction2]
     
     # Expand the relevent blocks
     if site == 1:
@@ -390,18 +500,41 @@ def partialNorm(env, A1, A2, site=0):
     
     return prod
 
-def partialOverlap(env, A1, A2, gate, site=0):
+def partialOverlap(env, A1, A2, gate, direction2=0, site=0):
+    """
+    Calculate the partial overlap after a trotter gate is applied.
+
+    Parameters
+    ----------
+    env : environment
+    A1 : np.ndarray
+        First tensor in optimization.
+    A2 : np.ndarray
+        Second tensor in optimization.
+    gate : np.ndarray
+        Two-site gate.
+    site : bool, optional
+        The site which is being optimized, 0 = first, 1 = second.
+        The default is 0.
+
+    Returns
+    -------
+    prod : np.ndarray
+        The overlap vector.
+
+    """
+    
     # Fetch the blocks
     left = env.leftBlock(env.center-1)
     right = env.rightBlock(env.center+1)
-    leftMPS = env.leftMPSBlock(env.center2-1)
-    rightMPS = env.rightMPSBlock(env.center2+2)
+    leftMPS = env.leftMPSBlock(env.center2-1-direction2)
+    rightMPS = env.rightMPSBlock(env.center2+2-direction2)
     
     # Get the bMPO tensors
-    Mleft1 = left.tensors[env.center2]
-    Mleft2 = left.tensors[env.center2+1]
-    Mright1 = right.tensors[env.center2]
-    Mright2 = right.tensors[env.center2+1]
+    Mleft1 = left.tensors[env.center2-direction2]
+    Mleft2 = left.tensors[env.center2+1-direction2]
+    Mright1 = right.tensors[env.center2-direction2]
+    Mright2 = right.tensors[env.center2+1-direction2]
     
     # Do the whole contractions for each of the four cases
     if env.dir == 0 and site == 1:
@@ -409,14 +542,14 @@ def partialOverlap(env, A1, A2, gate, site=0):
         prod = contract(prod, dag(A1), 0, 0)
         prod = trace(prod, 2, 5)
         prod = contract(prod, gate, 6, 0)
-        prod = contract(prod, env.psi.tensors[env.center][env.center2], 0, 0)
+        prod = contract(prod, env.psi.tensors[env.center][env.center2-direction2], 0, 0)
         prod = trace(prod, 1, 8)
         prod = trace(prod, 4, 9)
         prod = contract(prod, Mright1, 0, 0)
         prod = trace(prod, 1, 7)
         prod = trace(prod, 4, 6)
         prod = contract(prod, Mright2, 5, 0)
-        prod = contract(prod, env.psi.tensors[env.center][env.center2+1], 4, 0)
+        prod = contract(prod, env.psi.tensors[env.center][env.center2+1-direction2], 4, 0)
         prod = trace(prod, 5, 8)
         prod = trace(prod, 3, 8)
         prod = contract(prod, Mleft2, 0, 0)
@@ -428,7 +561,7 @@ def partialOverlap(env, A1, A2, gate, site=0):
         prod = permute(prod, 1)
     elif env.dir == 0 and site == 0:
         prod = contract(Mright2, rightMPS, 3, 3)
-        prod = contract(env.psi.tensors[env.center][env.center2+1], prod, 3, 5)
+        prod = contract(env.psi.tensors[env.center][env.center2+1-direction2], prod, 3, 5)
         prod = trace(prod, 2, 6)
         prod = contract(gate, prod, 3, 2)
         prod = contract(dag(A2), prod, 3, 8)
@@ -438,7 +571,7 @@ def partialOverlap(env, A1, A2, gate, site=0):
         prod = trace(prod, 2, 8)
         prod = trace(prod, 1, 3)
         prod = contract(Mright1, prod, 3, 5)
-        prod = contract(env.psi.tensors[env.center][env.center2], prod, 3, 7)
+        prod = contract(env.psi.tensors[env.center][env.center2-direction2], prod, 3, 7)
         prod = trace(prod, 2, 6)
         prod = trace(prod, 2, 8)
         prod = contract(Mleft1, prod, 3, 4)
@@ -451,14 +584,14 @@ def partialOverlap(env, A1, A2, gate, site=0):
         prod = contract(prod, dag(A1), 0, 1)
         prod = trace(prod, 2, 5)
         prod = contract(prod, gate, 6, 0)
-        prod = contract(prod, env.psi.tensors[env.center2][env.center], 0, 1)
+        prod = contract(prod, env.psi.tensors[env.center2-direction2][env.center], 0, 1)
         prod = trace(prod, 1, 8)
         prod = trace(prod, 4, 9)
         prod = contract(prod, Mright1, 0, 0)
         prod = trace(prod, 2, 7)
         prod = trace(prod, 5, 6)
         prod = contract(prod, Mright2, 5, 0)
-        prod = contract(prod, env.psi.tensors[env.center2+1][env.center], 4, 1)
+        prod = contract(prod, env.psi.tensors[env.center2+1-direction2][env.center], 4, 1)
         prod = trace(prod, 5, 9)
         prod = trace(prod, 3, 8)
         prod = contract(prod, Mleft2, 0, 0)
@@ -471,7 +604,7 @@ def partialOverlap(env, A1, A2, gate, site=0):
         prod = permute(prod, 3, 2)
     elif env.dir == 1 and site == 0:
         prod = contract(Mright2, rightMPS, 3, 3)
-        prod = contract(env.psi.tensors[env.center2+1][env.center], prod, 2, 5)
+        prod = contract(env.psi.tensors[env.center2+1-direction2][env.center], prod, 2, 5)
         prod = trace(prod, 2, 6)
         prod = contract(gate, prod, 3, 2)
         prod = contract(dag(A2), prod, 2, 8)
@@ -481,7 +614,7 @@ def partialOverlap(env, A1, A2, gate, site=0):
         prod = trace(prod, 2, 7)
         prod = trace(prod, 1, 2)
         prod = contract(Mright1, prod, 3, 5)
-        prod = contract(env.psi.tensors[env.center2][env.center], prod, 2, 7)
+        prod = contract(env.psi.tensors[env.center2-direction2][env.center], prod, 2, 7)
         prod = trace(prod, 2, 6)
         prod = trace(prod, 2, 8)
         prod = contract(Mleft1, prod, 3, 4)

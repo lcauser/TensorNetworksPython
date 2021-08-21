@@ -139,7 +139,7 @@ def dmrg(Hs, psi0 : mps, Vs=[], maxsweeps=0, minsweeps=1, tol=10**-8,
                 eig, vec = eigsh(Heff, k=1, which='SA', v0=A0.flatten(),
                                  ncv=3, tol=0.1)
             else:
-                eig, vec = eigs(Heff, k=1, which='LR', v0=A0.flatten(),
+                eig, vec = eigs(Heff, k=1, which='SR', v0=A0.flatten(),
                                 ncv=3, tol=0.1)
             A = reshape(vec, shape(A0))
             psi.replacebond(site - rev*(nsites-1), A, rev, cutoff=cutoff, mindim=mindim,

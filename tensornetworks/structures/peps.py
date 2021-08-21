@@ -197,6 +197,18 @@ class peps:
         return self
     
     
+    def rescale(self):
+        maxElement = 0
+        for i in range(self.length[0]):
+            for j in range(self.length[1]):
+                maxElement += np.log(np.max(np.abs(self.tensors[i][j])))
+        maxElement = maxElement / (self.length[0] * self.length[1])
+        for i in range(self.length[0]):
+            for j in range(self.length[1]):
+                self.tensors[i][j] *= np.exp(maxElement) / np.max(np.abs(self.tensors[i][j]))
+        return self
+    
+    
 
     def applyGate(self, gate, sites, mindim=1, maxdim=0, cutoff=10**-12,
                   normalize=False):

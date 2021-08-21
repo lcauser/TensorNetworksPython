@@ -8,6 +8,7 @@ import numpy as np # Will be the main numerical resource
 import copy # To make copies
 from tensornetworks.tensors import *
 from tensornetworks.structures.mps import mps
+from tensornetworks.sitetypes import sitetypes
 
 class mpo:
     
@@ -217,6 +218,12 @@ class mpo:
         for idx in range(self.length):
             dim = max(dim, self.bondDim(idx))
         return dim
+    
+    
+    def norm(self):
+        if self.center == None:
+            self.orthogonalize(0)
+        return norm(self.tensors[self.center])
         
     
 def uniformMPO(dim, length, M, dtype=np.float64):
@@ -279,7 +286,7 @@ def bMPO(length):
     return bMPO
 
 
-def applyMPO(O : mpo, psi : mps):
+def applyMPO(O : mpo, psi : mps, right = 0):
     """
     Apply a MPO to a MPS.
 
@@ -287,6 +294,9 @@ def applyMPO(O : mpo, psi : mps):
     ----------
     O : mpo
     psi : mps
+    right: bool
+        Apply from the right? (The default is 0.)
+        THIS FEATURE NEEDS IMPLEMENTING.
 
     Returns
     -------
@@ -339,5 +349,108 @@ def inner(psi1 : mps, O : mpo, psi2 : mps):
     
     return np.asscalar(prod)
     
+
+def traceMPO(O : mpo):
+    """
+    Trace an MPO
+
+    Parameters
+    ----------
+    O : mpo
+
+    Returns
+    -------
+    trace : number
+        The trace of the MPO
+
+    """
+    # Loop through each site
+    prod = ones((1))
+    for i in range(O.length):
+        M = O.tensors[i]
+        M = trace(M, 1, 2)
+        prod = contract(prod, M, 0, 0)
     
+    return prod.item()
+
+
+def applyMPOMPO(O1 : mpo, O2 : mpo):
+    """
+    Apply an MPO to an MPO.
+
+    Parameters
+    ----------
+    O1 : left mpo
+    O2 : right mpo
+
+    Returns
+    -------
+    O : mpo
+        MPO with a bond dimension multiple of the two original.
+
+    """
+    # Create new MPO
+    O = mpo(O1.dim, O1.length)
+    
+    # Loop through each site and contract the MPOs, and join their bond dims.
+    for i in range(O.length):
+        M1 = O1.tensors[i]
+        M2 = O2.tensors[i]
+        M = contract(M1, M2, 2, 1)
+        M, cmb = combineIdxs(M, [0, 3])
+        M, cmb = combineIdxs(M, [1, 3])
+        M = permute(M, 2, 0)
+        O.tensors[i] = M
+    return O
+
+
+def dagMPO(O : mpo):
+    """
+    Calculate the hermitian conjuagte of a MPO.
+
+    Parameters
+    ----------
+    O : mpo
+
+    Returns
+    -------
+    P : mpo
+    """
+    
+    P = copy.deepcopy(O)
+    # Loop through each site and permute the indices, take the complex conj
+    for i in range(O.length):
+        M = O.tensors[i]
+        M = dag(permute(M, 2, 1))
+        P.tensors[i] = M
+    return P
+
+
+def productMPO(s : sitetypes, ops):
+    """
+    Create a product (bond dimension one) MPS from a list of states.
+
+    Parameters
+    ----------
+    s : sitetypes
+        Site types with state names.
+    ops : list
+        List of operators.
+
+    Returns
+    -------
+    psi : mps
+        Product MPO.
+
+    """
+    # Check list of states
+    if not isinstance(ops, list):
+        raise ValueError("States must be a list of local operators.")
+    
+    # Create mps
+    O = mpo(s.dim, len(ops))
+    for i in range(len(ops)):
+        O.tensors[i][0, :, :, 0] = s.op(ops[i])
+    
+    return O
         

@@ -15,19 +15,42 @@ from tensornetworks.tensors import *
 from tensornetworks.structures.mpo import mpo
 from tensornetworks.structures.projbMPO import projbMPO
 
-def vbMPO(O : mpo, chi, tol=10**-8, cutoff=10**-20, maxiter=100):
+def vbMPO(O : mpo, chi, tol=10**-5, cutoff=0, maxiter=1000):
+    """
+    Variationally minimize a boundary MPO for some given environment bond
+    dimension.
+
+    Parameters
+    ----------
+    O : mpo
+    chi : int
+    tol : float, optional
+        Change in cost per sweep before converging. The default is 10**-8.
+    cutoff : Float, optional
+        Truncation error. The default is 0.
+    maxiter : int, optional
+        The maximum number of sweeps.. The default is 1000.
+
+    Returns
+    -------
+    P : mpo
+        Truncated boundary mpo.
+
+    """
+    
     # Start by copying the bMPO and using SVD to truncate
     P = copy.deepcopy(O)
     P.orthogonalize(P.length-1)
+    norm = P.norm()**2
     P.orthogonalize(0, maxdim=chi, cutoff=cutoff)
     
     # Construct the projectors
-    projPP = projbMPO(P, P)
     projOP = projbMPO(O, P)
     
     # Calculate the difference (up to a constant..)
     projOPdiff = projOP.calculate()
-    diff = 2*projPP.calculate() - projOPdiff - np.conj(projOPdiff)
+    cost = norm + P.norm()**2 - projOPdiff - np.conj(projOPdiff)
+    
     
     # Loop until the change in difference converges
     converged = False
@@ -41,7 +64,6 @@ def vbMPO(O : mpo, chi, tol=10**-8, cutoff=10**-20, maxiter=100):
             
             # Orthogonalize bMPO and move projection centers
             P.orthogonalize(site)
-            projPP.moveCenter(site)
             projOP.moveCenter(site)
             
             # Find the optimal update
@@ -53,15 +75,17 @@ def vbMPO(O : mpo, chi, tol=10**-8, cutoff=10**-20, maxiter=100):
         rev = 1 - rev
         
         # Calculate the new difference
-        oldDiff = diff
+        oldCost = cost
         projOPdiff = projOP.calculate()
-        diff = 2*projPP.calculate() - projOPdiff - np.conj(projOPdiff)
+        cost = norm + P.norm()**2 - projOPdiff - np.conj(projOPdiff)
         
         # Check to see if converged
         iterations += 1
-        if np.abs(diff - oldDiff) < tol:
+        if np.abs(np.real(cost)) >= 10**-12:
+            if np.real((oldCost - cost)/cost) <= tol:
+                converged = True
+        else:
             converged = True
         if maxiter != 0 and iterations >= maxiter:
             converged = True
-    
     return P

@@ -6,6 +6,7 @@
 import numpy as np # Will be the main numerical resource
 import copy # To make copies
 from scipy.linalg import expm
+import scipy
 
 
 def tensor(dims, data=None, dtype=np.complex128):
@@ -297,12 +298,21 @@ def svd(x, idx=-1, mindim=1, maxdim=0, cutoff=0):
     y = permute(y, 0)
     
     # Apply SVD
-    U, S, V = np.linalg.svd(y)
+    try:
+        U, S, V = scipy.linalg.svd(y)
+    except Exception:
+        print("Warning: Divide and conquer failed, use rectangular approach")
+        U, S, V = scipy.linalg.svd(y, lapack_driver='gesvd')
     
+   
     # Find how many singular values we should keep
     mindim = min(mindim, np.size(S))
     if maxdim == 0:
         maxdim = np.size(S)
+    # Check for zeros
+    idxs = np.where(S == 0)[0]
+    if np.size(idxs) != 0:
+        maxdim = min(maxdim, idxs[0])
     maxdim = min(np.size(S), maxdim)
     if cutoff != 0 and np.sum(S) > 10**-16:
         S2 = S**2
