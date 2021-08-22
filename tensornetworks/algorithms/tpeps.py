@@ -175,8 +175,7 @@ def optimize(env, i, j, direction, direction2, gate, maxdim, cutoff=10**-16,
         b1 = partialOverlap(env, reshape(A1, shape1), reshape(A2, shape2),
                             gate, direction2, 0).flatten()
         b1 = 0.5*(b1+dag(b1))
-        #A1, info = cg(L1, b1, A1, maxiter=100, tol=10**-10)
-        A1 = scipy.sparse.linalg.lsmr(L1, b1, maxiter=100, atol=10**-10,
+        A1 = scipy.sparse.linalg.lsmr(L1, b1, maxiter=4, atol=10**-10,
                                       btol=10**-10, x0=A1)[0]
         
         # Optimize the second
@@ -188,8 +187,7 @@ def optimize(env, i, j, direction, direction2, gate, maxdim, cutoff=10**-16,
         b2 = partialOverlap(env, reshape(A1, shape1), reshape(A2, shape2),
                             gate, direction2, 1).flatten()
         b2 = 0.5*(b2+dag(b2))
-        #A2, info = cg(L2, b2, A2, maxiter=100, tol=10**-10)
-        A2 = scipy.sparse.linalg.lsmr(L2, b2, maxiter=100, atol=10**-10,
+        A2 = scipy.sparse.linalg.lsmr(L2, b2, maxiter=4, atol=10**-10,
                                       btol=10**-10, x0=A2)[0]
         
         # Calculate the overlap and norms

@@ -41,7 +41,7 @@ def calculateEnergy(psi, chi):
 
 # Parameters
 c = 0.5
-s = 0.1
+s = -0.1
 N = 6
 chi = 20
 maxiter = 1000
@@ -54,7 +54,7 @@ states = []
 for i in range(N):
     states2 = []
     for j in range(N):
-        states2.append("dn")
+        states2.append("s")
     states.append(states2)
 states[0][0] = "up"
 states[N-1][N-1] = "s"

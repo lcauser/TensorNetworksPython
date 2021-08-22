@@ -453,4 +453,55 @@ def productMPO(s : sitetypes, ops):
         O.tensors[i][0, :, :, 0] = s.op(ops[i])
     
     return O
-        
+
+
+def saveMPS(psi : mps, directory : str):
+    """
+    Save a MPS to storage.
+
+    Parameters
+    ----------
+    psi : mps
+    directory : str
+        Save file location.
+    """
+    # Add relevent data to list
+    data = []
+    data.append(psi.tensors)
+    data.append(psi.center)
+    data.append(psi.dtype)
+    
+    np.save(directory, np.asarray(data, dtype=np.object_))
+    return None
+
+
+def loadMPS(directory : str):
+    """
+    Load an MPS from storage.
+
+    Parameters
+    ----------
+    directory : str
+        Save location
+
+    Returns
+    -------
+    psi : mps
+
+    """
+    # Load the file
+    data = np.load(directory)
+
+    # Determine the properties
+    dim = shape(data[0][0])[1]
+    length = len(data[0])
+    center = data[1]
+    dtype = data[2]
+    
+    # Create an MPS and add the properties
+    psi = mps(dim, length, dtype)
+    for i in range(length):
+        psi.tensors[i] = data[0][i]
+    psi.center = center
+    
+    return psi
